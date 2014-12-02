@@ -1,6 +1,20 @@
 import math
 import mobius
 
+def same_float(x,y, tol=1e-10):
+  return abs(x-y) < tol
+
+def rough_acos(x,cutoff=1e-5):
+  try:
+    return math.acos(x)
+  except ValueError:
+    if x > 1.0 and x-1.0 < cutoff:
+      return 0.0
+    elif x < -1.0 and -1.0-x < cutoff:
+      return math.pi/2.0
+    else:
+      raise ValueError('math domain error')
+
 def hyp_dist(v1,v2):
   x = 1 + (((v2.real-v1.real)**2 + (v2.imag-v2.real)**2)/(2*v1.imag*v2.imag))
   return math.acosh(x)
@@ -45,7 +59,8 @@ def hyp_tri_angle(L, ind):
   """return the angle at position ind"""
   top = math.cosh(L[ind])*math.cosh(L[(ind+2)%3]) - math.cosh( L[(ind+1)%3] )
   bottom = math.sinh(L[ind])*math.sinh(L[(ind+2)%3])
-  return math.acos(top/bottom)
+  r = top/bottom
+  return rough_acos(r)
 
 def hyp_tri_angle_deriv(L, i, j):
   """compute the derivative of angle i with respect to side length j"""
@@ -65,9 +80,6 @@ def hyp_tri_angle_deriv(L, i, j):
   else:              #deriv of angle with respect to c
     num = cscha*cschb*math.sinh(c)
   return num/den
-
-def same_float(x,y, tol=1e-10):
-  return abs(x-y) < TOL
 
 class HypGeodesicInterval:
   def __init__(self, v1, v2):
@@ -136,7 +148,7 @@ class EmHypTri(HypTri):
     self.em_sides = [gi for gi in GI]
     self.em_v = [gi.start for gi in GI]
     self.lengths = [gi.length for gi in GI]
-    self.angles - hyp_tri_angles(self.lengths)
+    self.angles = hyp_tri_angles(self.lengths)
   
   @classmethod
   def from_vertices(cls, em_V):
