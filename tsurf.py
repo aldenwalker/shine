@@ -132,15 +132,16 @@ class TopSurface :
     return str(self)
   
   def __str__(self):
-    ans = "Vertices: \n"
-    for V in self.v:
-      ans += str(V) + "\n"
+    ans = "Topological surface\n"
+    ans += "Vertices: \n"
+    for i,V in enumerate(self.v):
+      ans += str(i) + ": " + str(V) + "\n"
     ans += "\nEdges: \n"
-    for E in self.e:
-      ans += str(E) + "\n"
+    for i,E in enumerate(self.e):
+      ans += str(i) + ": " + str(E) + "\n"
     ans += "\nTriangles: \n"
-    for F in self.f:
-      ans += str(F) + "\n"
+    for i,F in enumerate(self.f):
+      ans += str(i) + ": " + str(F) + "\n"
     return ans
 
   def euler_char(self):
