@@ -1,4 +1,5 @@
-import scipy.optimization
+import math
+import scipy.optimize
 
 import models
 import tsurf
@@ -9,12 +10,13 @@ class GeoSurface(tsurf.TopSurface):
     self.e = TS.e
     self.f = TS.f
     self.h_lengths = lens
-    self.h_tris = [models.HypTri([lens[ei.ind] for ei in F]) for F in self.f]
+    self.h_tris = [models.HypTri([lens[ei.ind] for ei in F.i_edges]) for F in self.f]
   
   @classmethod
   def geometrize_tsurf(cls, TS, edge_hints=None):
+    num_edges = len(TS.e)
     if edge_hints == None:
-      desired_edge_lengths = [1 for i in xrange(TS.e)]
+      desired_edge_lengths = [1 for i in xrange(num_edges)]
     else:
       desired_edge_lengths = [eh for eh in edge_hints]
     
@@ -53,7 +55,8 @@ class GeoSurface(tsurf.TopSurface):
                                   jac=True,                       \
                                   bounds=[(0,None) for i in xrange(num_edges)], \
                                   constraints=cons,               \
-                                  disp=True )
+                                  method='SLSQP',                 \
+                                  )#disp=True )
     if not res.success:
       print "Failed to find structure"
       return None
@@ -77,5 +80,5 @@ class GeoSurface(tsurf.TopSurface):
     ans += "\nTriangles: \n"
     for i,F in enumerate(self.f):
       ans += str(i) + ": " + str(F) + " HypTri: " + str(self.h_tris[i]) + "\n"
-      
+    return ans
     

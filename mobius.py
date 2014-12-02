@@ -28,8 +28,8 @@ class MobiusTrans:
     return m
   
   @classmethod
-  def points_to_points(cls, [z1, z2, z3], [w1, w2, w3]):
-    return cls.points_to_01inf(w1, w2, w3).inverse().compose( cls.points_to_01inf(z1, z2, z3) )
+  def points_to_points(cls, Z, W):
+    return cls.points_to_01inf(*W).inverse().compose( cls.points_to_01inf(*Z) )
   
   def __call__(self, z):
     if z == 'inf':

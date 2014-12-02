@@ -41,6 +41,16 @@ def hyp_tri_angles(L):
     ans[i] = math.acos(top/bottom)
   return ans
 
+def hyp_tri_angle(L, ind):
+  """return the angle at position ind"""
+  top = math.cosh(L[ind])*math.cosh(L[(ind+2)%3]) - math.cosh( L[(ind+1)%3] )
+  bottom = math.sinh(L[ind])*math.sinh(L[(ind+2)%3])
+  return math.acos(top/bottom)
+
+def hyp_tri_angle_deriv(L, i, j):
+  """compute the derivative of angle i with respect to side length j"""
+  
+
 def same_float(x,y, tol=1e-10):
   return abs(x-y) < TOL
 
@@ -102,8 +112,8 @@ class HypTri:
     p2,A2,d2 = gi.end, math.pi - self.angles[(side_ind+1)%3], gi.final_angle, self.lengths[(i+1)%3]
     pp1 = hyp_point_angle_dist(p1, A1, d1)
     pp2 = hyp_point_angle_dist(p2, A2, d2)
-    if (not same_float(pp1.real, pp2.real) or (not same_float(pp1.imag, pp2.imag)):
-      print "Doesn't seem to be the same going from both sides?
+    if (not same_float(pp1.real, pp2.real)) or (not same_float(pp1.imag, pp2.imag)):
+      print "Doesn't seem to be the same going from both sides?"
     return EmHypTri.from_vertices(p1, p2, p11)
 
 class EmHypTri(HypTri):
