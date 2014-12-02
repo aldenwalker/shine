@@ -1,4 +1,5 @@
 import math
+import random
 import scipy.optimize
 
 import models
@@ -37,26 +38,35 @@ class GeoSurface(tsurf.TopSurface):
         return ans
       def this_jac(x):
         ans = [0 for _ in xrange(len(x))]
-        inc_edges = len(v.i_edges)
-        for j in xrange(inc_edges):
-          f_before = v.i_faces[(j-1)%len(v.i_faces)]
-          f_before_lengths = [x[ei.ind] for ei in TS.f[f_before[0]]]
-          f_after = v.i_faces[j]
-          f_after_lengths = [x[ei.ind] for ei in TS.f[f_after[0]]]
-          ans[v.i_edges[j]] += models.hyp_tri_angle_deriv( f_before_lengths, f_before[1], (f_before[1]-1)%3 )
-          ans[v.i_edges[j]] += models.hyp_tri_angle_deriv( f_after_lengths, f_after[1], (f_after[1]+1)%3 )
+        incident_faces = len(v.i_faces)
+        for fi,j in v.i_faces:   #fi is the triangle index, j is the index of this angle in the triangle
+          F = TS.f[fi]
+          Flens = [x[ei.ind] for ei in F.i_edges]
+          for k,ei in enumerate(F.i_edges):  #k is the side index in the triangle, ei is the edge index
+            ans[ei.ind] += models.hyp_tri_angle_deriv( Flens, j, k )
         return ans
       cons[i]['type'] = 'eq'
       cons[i]['fun'] = this_func
       cons[i]['jac'] = this_jac
     
+    def callbackdisplay(x):
+      print "Current x: ", x
+      print "Objective and jacobian:"
+      print obj_fun(x), " ", obj_fun_grad(x)
+      print "Constraints and jacobians:"
+      for i in xrange(len(TS.v)):
+        print i, ": ", cons[i]['fun'](x), ",   ", cons[i]['jac'](x)
+    
+    x0 = [k + random.random() for k in desired_edge_lengths]
+    callbackdisplay(x0)
     res = scipy.optimize.minimize(f,                              \
-                                  desired_edge_lengths,           \
+                                  x0,           \
                                   jac=True,                       \
                                   bounds=[(0,None) for i in xrange(num_edges)], \
                                   constraints=cons,               \
                                   method='SLSQP',                 \
-                                  )#disp=True )
+                                  options={'disp':True},          \
+                                  callback=callbackdisplay )
     if not res.success:
       print "Failed to find structure"
       return None

@@ -49,7 +49,22 @@ def hyp_tri_angle(L, ind):
 
 def hyp_tri_angle_deriv(L, i, j):
   """compute the derivative of angle i with respect to side length j"""
-  
+  a = L[i]
+  b = L[(i+2)%3]
+  c = L[(i+1)%3]
+  cscha = 1/math.sinh(a)
+  cschb = 1/math.sinh(b)
+  cothb = math.cosh(b)/math.sinh(b)
+  cotha = math.cosh(a)/math.sinh(a)
+  coshc = math.cosh(c)
+  den = math.sqrt(1- (cotha*cothb - coshc*cscha*cschb)**2)
+  if i==j:           #deriv of angle with respect to a
+    num = cscha*(cothb*cscha - coshc*cotha*cschb)
+  elif j==(i+2)%3:    #deriv of angle with respect to b
+    num = cschb*(cotha*cschb - coshc*cothb*cscha)
+  else:              #deriv of angle with respect to c
+    num = cscha*cschb*math.sinh(c)
+  return num/den
 
 def same_float(x,y, tol=1e-10):
   return abs(x-y) < TOL
