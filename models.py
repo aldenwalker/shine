@@ -92,7 +92,7 @@ class HypGeodesicInterval:
       perp = ( complex(-vec.imag, vec.real) if vec.real > 0 else complex(vec.imag, -vec.real) )
       t = av.imag / perp.imag
       self.vertical = False
-      self.circ_center = (av - t*perp.imag).real
+      self.circ_center = (av - t*perp).real
       self.circ_radius = abs(v2-self.circ_center)
       self.circ_angle1 = math.atan2(v1.imag, v1.real - self.circ_center)
       self.circ_angle2 = math.atan2(v2.imag, v2.real - self.circ_center)
@@ -139,10 +139,15 @@ class HypTri:
     lies along the geodesic interval gi"""
     if not same_float(gi.length, self.lengths[side_ind]):
       raise ValueError("Can't realize it because the edge isn't the right size")
+    #print "Realizing triangle ", self
+    #print "With edge", side_ind
+    #print "Along gi:", gi, " of length", gi.length
     p1,A1,d1 = gi.start, gi.initial_angle+self.angles[side_ind], self.lengths[(side_ind-1)%3]
     p2,A2,d2 = gi.end, (math.pi - self.angles[(side_ind+1)%3]) + gi.final_angle, self.lengths[(side_ind+1)%3]
     pp1 = hyp_point_angle_dist(p1, A1, d1)
     pp2 = hyp_point_angle_dist(p2, A2, d2)
+    #print "First point ", p1, A1, d1, " -> ", pp1
+    #print "Second point ", p2, A2, d2, " -> ", pp2
     if (not same_float(pp1.real, pp2.real)) or (not same_float(pp1.imag, pp2.imag)):
       raise ValueError("Doesn't seem to be the same going from both sides?")
     vs = [p1, p2, pp1]
@@ -166,7 +171,7 @@ class EmHypTri(HypTri):
     return str(self)
   
   def __str__(self):
-    return "EmHypTri(", self.em_v, ")"
+    return "EmHypTri("+ str(self.v) +  ")"
     
   
   

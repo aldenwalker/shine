@@ -14,7 +14,7 @@ class GeoSurface(tsurf.TopSurface):
     self.h_tris = [models.HypTri([lens[ei.ind] for ei in T.i_edges]) for T in self.t]
   
   @classmethod
-  def geometrize_tsurf(cls, TS, edge_hints=None):
+  def geometrize_tsurf(cls, TS, edge_hints=None, verbose=0):
     if TS.euler_char() >= 0:
       print "Only hyperbolic supported"
       return
@@ -76,11 +76,12 @@ class GeoSurface(tsurf.TopSurface):
                                   bounds=bounds, \
                                   constraints=cons,               \
                                   method='SLSQP',                 \
-                                  options={'disp':True,'iprint':2})
+                                  options={'disp':True,'iprint':verbose})
     if not res.success:
       print "Failed to find structure"
       return None
-    print "Found structure"
+    if verbose>0:
+      print "Found structure"
     gs = cls(TS, res.x)
     return gs
   

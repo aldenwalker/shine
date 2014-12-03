@@ -13,7 +13,6 @@ class LaidOutSurface(gsurf.GeoSurface):
     """do the bookkeeping to attach edge index i in triangle index ti
     to the geodesic interval gi (it must be of the correct length)"""
     ei = self.t[ti].i_edges[i]
-    #G = (gi if ei.sign>0 else gi.reversed())
     self.em_t[ti] = self.h_tris[ti].realize_along_gi(gi, i)
     #record what we've done
     for j,ei in enumerate(self.t[ti].i_edges):
@@ -21,7 +20,7 @@ class LaidOutSurface(gsurf.GeoSurface):
         self.em_e[ei.ind][0] = self.em_t[ti].sides[j]
         self.em_v[self.e[ei.ind].source].append( self.em_t[ti].v[j] )
       else:
-        self.em_e[ei.ind][1] = self.em_t[ti].sides[j].reversed()
+        self.em_e[ei.ind][1] = self.em_t[ti].sides[j]
         self.em_v[self.e[ei.ind].dest].append( self.em_t[ti].v[j] )
     return
         
@@ -38,7 +37,6 @@ class LaidOutSurface(gsurf.GeoSurface):
     gi = models.HypGeodesicInterval(p1,p2).reversed()
     ti,j = self.e[0].on_right
     self.attach_triangle_to_gi(ti, j, gi)
-    print "Attached triangle ", ti, " to ", gi
     while True:
       #find the edge which is (1) half glued and (2) the median Euclidean size
       half_glued_edges = []
@@ -55,8 +53,10 @@ class LaidOutSurface(gsurf.GeoSurface):
       side_to_glue = (0 if self.em_e[edge_to_glue][0] == None else 1) #0 means glue left
       ti,j = (self.e[edge_to_glue].on_right if side_to_glue == 1 else self.e[edge_to_glue].on_left)
       gi = self.em_e[edge_to_glue][1-side_to_glue].reversed()
-      print "Attaching triangle", ti, j, "to", gi, "of length", gi.length
-      print "Triangle: ", self.h_tris[ti]
+      #print "Edge to glue: ", edge_to_glue
+      #print "Side to glude: ", side_to_glue
+      #print "Attaching triangle", ti, j, "to", gi, "of length", gi.length
+      #print "Triangle: ", self.h_tris[ti]
       self.attach_triangle_to_gi(ti, j, gi)
     return
       

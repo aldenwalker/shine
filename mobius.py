@@ -43,7 +43,7 @@ class MobiusTrans:
     #scale to i
     Mhyp = cls(1/math.sqrt(p.imag), 0, 0, math.sqrt(p.imag))
     #rotate to vertical
-    theta = (math.pi/2.0-A)/2.0
+    theta = (A-math.pi/2.0)/2.0
     Mell = cls(math.cos(theta), -math.sin(theta), math.sin(theta), math.cos(theta))
     return Mell.compose( Mhyp.compose( Mpar ) )
   
