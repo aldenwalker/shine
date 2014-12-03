@@ -35,9 +35,9 @@ def polygon_edge_inds(w):
 class Vertex :
   def __init__(self, iE, iF):
     self.i_edges = iE
-    self.i_faces = iF
+    self.i_tris = iF
   def __repr__(self):
-    return "Vertex(" + str(self.i_edges) + "," + str(self.i_faces) + ")"
+    return "Vertex(" + str(self.i_edges) + "," + str(self.i_tris) + ")"
   def __str__(self):
     return repr(self)
 
@@ -66,7 +66,7 @@ class TopSurface :
     if method == None:
       self.v = []
       self.e = []
-      self.f = []
+      self.t = []
     
     elif method=='polygon':
       Lw = len(w)
@@ -75,7 +75,7 @@ class TopSurface :
       num_outside_edges = max([ei.ind for ei in gens_to_edges.values()])+1
       num_verts = len(v_labels) + 1
       self.e = [Edge(None,None,None,None) for i in xrange(num_outside_edges + Lw)]
-      self.f = [None for i in xrange(Lw)]
+      self.t = [None for i in xrange(Lw)]
       for i in xrange(num_outside_edges, num_outside_edges + Lw):
         self.e[i].source = num_verts-1
       
@@ -111,22 +111,22 @@ class TopSurface :
             self.e[ei.ind].on_right = (i, j)
           else:
             self.e[ei.ind].on_left = (i, j)
-        self.f[i] = Triangle(v,e)
+        self.t[i] = Triangle(v,e)
       
       #fill in the face data for the edges and vertices
       #and also where in the vertex each angle is
       for i,V in enumerate(self.v):
-        V.i_faces = [-1 for _ in xrange(len(V.i_edges))]
+        V.i_tris = [-1 for _ in xrange(len(V.i_edges))]
         for j in xrange(len(V.i_edges)):
           ei = V.i_edges[j]
           if ei.sign > 0:
             OL = self.e[ei.ind].on_left
-            V.i_faces[j] = OL
-            self.f[OL[0]].i_verts[OL[1]] = (i,j)
+            V.i_tris[j] = OL
+            self.t[OL[0]].i_verts[OL[1]] = (i,j)
           else:
             OR = self.e[ei.ind].on_right
-            V.i_faces[j] = OR
-            self.f[OR[0]].i_verts[OR[1]] = (i,j)       
+            V.i_tris[j] = OR
+            self.t[OR[0]].i_verts[OR[1]] = (i,j)       
     
   def __repr__(self):
     return str(self)
@@ -140,12 +140,12 @@ class TopSurface :
     for i,E in enumerate(self.e):
       ans += str(i) + ": " + str(E) + "\n"
     ans += "\nTriangles: \n"
-    for i,F in enumerate(self.f):
-      ans += str(i) + ": " + str(F) + "\n"
+    for i,T in enumerate(self.t):
+      ans += str(i) + ": " + str(T) + "\n"
     return ans
 
   def euler_char(self):
-    return len(self.v) - len(self.e) + len(self.f)
+    return len(self.v) - len(self.e) + len(self.t)
   
 
 
