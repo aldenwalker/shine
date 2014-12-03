@@ -1,8 +1,7 @@
 import math
-import random
 import scipy.optimize
 
-import models
+import hyp
 import tsurf
 
 class GeoSurface(tsurf.TopSurface):
@@ -11,7 +10,7 @@ class GeoSurface(tsurf.TopSurface):
     self.e = TS.e
     self.t = TS.t
     self.h_lengths = lens
-    self.h_tris = [models.HypTri([lens[ei.ind] for ei in T.i_edges]) for T in self.t]
+    self.h_tris = [hyp.HypTri([lens[ei.ind] for ei in T.i_edges]) for T in self.t]
   
   @classmethod
   def geometrize_tsurf(cls, TS, edge_hints=None, verbose=0):
@@ -40,7 +39,7 @@ class GeoSurface(tsurf.TopSurface):
       def this_func(x,v=v):
         ans = -2*math.pi
         for ti,j in v.i_tris:
-          ans += models.hyp_tri_angle( [x[ei.ind] for ei in TS.t[ti].i_edges], j )
+          ans += hyp.tri_angle( [x[ei.ind] for ei in TS.t[ti].i_edges], j )
         return ans
       def this_jac(x,v=v):
         ans = [0 for _ in xrange(len(x))]
@@ -49,7 +48,7 @@ class GeoSurface(tsurf.TopSurface):
           T = TS.t[ti]
           Tlens = [x[ei.ind] for ei in T.i_edges]
           for k,ei in enumerate(T.i_edges):  #k is the side index in the triangle, ei is the edge index
-            ans[ei.ind] += models.hyp_tri_angle_deriv( Tlens, j, k )
+            ans[ei.ind] += hyp.tri_angle_deriv( Tlens, j, k )
         return ans
       cons[i]['type'] = 'eq'
       cons[i]['fun'] = this_func

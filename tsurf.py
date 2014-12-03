@@ -147,6 +147,10 @@ class TopSurface :
   def euler_char(self):
     return len(self.v) - len(self.e) + len(self.t)
   
+  def highest_valence_vertex(self):
+    L = [(i,len(v.i_edges)) for i,v in enumerate(self.v)]
+    L.sort(key=lambda x:x[1])
+    return L[-1][0]
 
 
 
