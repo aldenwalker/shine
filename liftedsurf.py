@@ -1,15 +1,31 @@
+import tsurf
 import gsurf
 import hyp
 
 import math
 
+
+class CoveringVertex(tsurf.Vertex):
+  def __init__(self, iE, iT, pt, covered_v):
+    self.i_edges = iE
+    self.i_tris = iT
+    self.pt = pt
+    self.covered_v
+  def __repr__(self):
+    
+
+
+
 class LiftedSurface(gsurf.GeoSurface):
-  def __init__(self, GS, ev, ee, et, e_single_lifts):
+  def __init__(self, GS, ev, ee, et, v_lifts, e_lifts, t_lifts, e_single_lifts):
     self.v, self.e, self.t = GS.v, GS.e, GS.t
     self.h_tris, self.h_lengths = GS.h_tris, GS.h_lengths
     self.em_v = ev
     self.em_e = ee
     self.em_t = et
+    self.v_lifts
+    self.e_lifts
+    self.t_lifts
     self.e_single_lift = e_single_lifts
   
   @classmethod

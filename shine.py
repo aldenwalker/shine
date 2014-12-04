@@ -130,7 +130,17 @@ class SurfaceVisualizer:
       self.canvas.delete(di)
     self.drawing_items = []
     
-    self.e_lifts = []
+    self.drawn_v = [None for v in self.v]
+    self.drawn_e = []
+    self.drawn_t = []
+    
+    for vi in xrange(len(self.v)):
+      for lifted_v in self.em_v[vi]:
+        
+    for ti in xrange(len(self.t)):
+      
+    
+    
     for ei, (gi_left, gi_right) in enumerate(self.LS.em_e):
       if self.LS.e_single_lifts[ei]:
         self.draw_geodesic_segment(gi_left, thickness=1)
