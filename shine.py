@@ -61,11 +61,12 @@ class SurfaceVisualizer:
     #is taken from the bottom of the screen
     #and the x coord is taken from the middle
     self.draw_scale = 50.0
-    self.draw_width = None           #will be set by Configure
-    self.draw_height = None          #will be set by Configure
-    self.draw_middle = None          #will be set by Configure
-    self.draw_complex_width = None   #will be set by Configure
-    self.draw_complex_height = None  #will be set by Configure
+    self.draw_width = None           #All will be set by Configure
+    self.draw_height = None        
+    self.draw_middle = None         
+    self.draw_complex_width = None  
+    self.draw_complex_height = None 
+    self.draw_extended_LS = None
     #everything is acted upon by self.draw_trans before drawing
     self.draw_trans = mobius.MobiusTrans(1,0,0,1)
     #the drawing the currently empty (but it will be filled by the canvas Configure)
@@ -130,34 +131,18 @@ class SurfaceVisualizer:
       self.canvas.delete(di)
     self.drawing_items = []
     
-    self.drawn_v = [None for v in self.v]
-    self.drawn_e = []
-    self.drawn_t = []
+    self.extended_LS = liftedsurf.LiftedSurface(                              \
+      self.LS.GS,                                                             \
+      [liftedsurf.CoveringVertex( self.draw_trans(v.pt), v.covered_v, v.i_edges, v.i_tris) for v in self.LS.em_v], \
+      [liftedsurf.CoveringEdge( e.gi.act_by_mobius(self.draw_trans), e.covered_e, e.source, e.dest, e.on_left, e.on_right) for e in self.LS.em_e], \
+      [liftedsurf.CoveringTri( t.t.act_by_mobius(self.draw_trans), t.covered_t, t.i_edges, t.i_verts) for t in self.LS.em_t], \
+      self.LS.v_lifts, self.LS.e_lifts, self.LS.t_lifts)
     
-    for vi in xrange(len(self.v)):
-      for lifted_v in self.em_v[vi]:
-        
-    for ti in xrange(len(self.t)):
-      
-    
-    
-    for ei, (gi_left, gi_right) in enumerate(self.LS.em_e):
-      if self.LS.e_single_lifts[ei]:
-        self.draw_geodesic_segment(gi_left, thickness=1)
+    for e in enumerate(self.extended_LS.em_e):
+      if len(self.extended_LS.e_lifts[e.covered_e])==1:
+        self.draw_geodesic_segment(e.gi, thickness=1, do_trans=False)
       else:
-        self.e_lifts.append( (ei, gi_left.act_by_mobius(self.draw_trans), [1,0]) )
-        self.draw_geodesic_segment(gi_left, thickness=2)
-        self.e_lifts.append( (ei, gi_right.act_by_mobius(self.draw_trans), [0,1]) )
-        self.draw_geodesic_segment(gi_right, thickness=2)
-    for vi,V in enumerate(self.LS.em_v):
-      c = self.draw_colors[vi%len(self.draw_colors)]
-      for p in V:
-        self.draw_point(p,c)
-    
-    self.propagate_lifts()
-    
-    for ei, gi in self.e_lifts:
-      self.draw_geodesic_segment(gi, thickness=1, do_trans=False)
+        self.draw_geodesic_segment(e.gi, thickness=2, do_trans=False)
     
   
   def propagate_lifts(self):
@@ -245,4 +230,16 @@ def visualize_surface(LS):
   root = tk.Tk()
   vs = SurfaceVisualizer(root, LS)
   root.mainloop()
+
+
+
+def test():
+  T = tsurf.TopSurface(method='polygon', w='abABcdCD')
+  G = gsurf.GeoSurface.geometrize_tsurf(T)
+  L = liftedsurf.LiftedSurface.lift_gsurf(G)
+  visualize_surface(L)
+  
+
+
+
 

@@ -1,52 +1,66 @@
 import tsurf
 import gsurf
 import hyp
+from signedind import SignedInd as SI
 
 import math
 
 
+
 class CoveringVertex(tsurf.Vertex):
-  def __init__(self, iE, iT, pt, covered_v):
+  def __init__(self, pt, covered_v, iE, iT):
     self.i_edges = iE
     self.i_tris = iT
     self.pt = pt
-    self.covered_v
+    self.covered_v = covered_v
   def __repr__(self):
-    
-
+    return "CoveringVertex(" + str(self.pt) + "," + str(self.covered_v) + "," + str(self.i_edges) + str(self.i_tris) + ")"
+  def __str__(self):
+    return repr(self)
+ 
+class CoveringEdge(tsurf.Edge):
+  def __init__(self, gi, covered_e, source, dest, on_left, on_right):
+    self.gi, self.covered_e, self.source = gi, covered_e, source
+    self.dest, self.on_left, self.on_right = dest, on_left, on_right
+  def __repr__(self):
+    return "CoveringEdge(" + str(self.gi) + "," + str(self.covered_e) + "," \
+                           + str(self.source) + "," + str(self.dest) + "," \
+                           + str(self.on_left) + "," + str(self.on_right) + ")"
+  def __str__(self):
+    return repr(self)
+  
+class CoveringTri(tsurf.Triangle):
+  def __init__(self, t, covered_t, i_edges, i_verts):
+    self.t, self.covered_t = t, covered_t
+    self.i_edges, self.i_verts = i_edges, i_verts
+  def __repr__(self):
+    return "CoveringTri(" + str(self.t) + "," + str(self.covered_t) + ","  \
+                          + str(self.i_edges) + str(self.i_verts) + ")"
+  def __str__(self):
+    return repr(self)
 
 
 class LiftedSurface(gsurf.GeoSurface):
-  def __init__(self, GS, ev, ee, et, v_lifts, e_lifts, t_lifts, e_single_lifts):
+  def __init__(self, GS, ev, ee, et, v_lifts, e_lifts, t_lifts):
     self.v, self.e, self.t = GS.v, GS.e, GS.t
     self.h_tris, self.h_lengths = GS.h_tris, GS.h_lengths
+    self.GS = GS
     self.em_v = ev
     self.em_e = ee
     self.em_t = et
-    self.v_lifts
-    self.e_lifts
-    self.t_lifts
-    self.e_single_lift = e_single_lifts
+    self.v_lifts = v_lifts
+    self.e_lifts = e_lifts
+    self.t_lifts = t_lifts
   
   @classmethod
-  def lift_gsurf(cls, GS, method='vertices'):
-    LS = cls(GS, None, None, None, None)
-    LS.relay(method=method)
+  def lift_gsurf(cls, GS):
+    LS = cls(GS, None, None, None, None, None, None)
+    LS.relay()
     return LS
-  
-  def clean_vertices(self):
-    for i in xrange(len(self.em_v)):
-      if self.em_v[i] == None:
-        continue
-      new_points = []
-      for p in self.em_v[i]:
-        if all([not hyp.same_float(p, x) for x in new_points]):
-          new_points.append(p)
-      self.em_v[i] = new_points
   
   def is_vertex_surrounded(self, vi):
     """are all adjacent triangles placed?"""
-    return all([self.em_t[ti] != None for ti,j in self.v[vi].i_tris])
+    return all([len(self.t_lifts[ti])>0 for ti,j in self.v[vi].i_tris])
   
   def attach_triangle_to_gi(self, ti, i, gi):
     """do the bookkeeping to attach edge index i in triangle index ti
@@ -62,94 +76,167 @@ class LiftedSurface(gsurf.GeoSurface):
         self.em_e[ei.ind][1] = self.em_t[ti].sides[j]
         self.em_v[self.e[ei.ind].dest].append( self.em_t[ti].v[j] )
     return
+  
+  def lift_triangle_to_lifted_edge(self, lifted_ei):
+    s = lifted_ei.sign
+    lifted_e = self.em_e[lifted_ei.ind]
+    lower_e = self.e[lifted_e.covered_e]
+    if (lifted_e.on_left if s>0 else lifted_e.on_right) != None:
+      raise ValueError("Attaching a triangle where there is one already?")
+    gi = (lifted_e.gi if s>0 else lifted_e.gi.reversed())
+    lower_ti,j = (lower_e.on_left if s>0 else lower_e.on_right)
+    lower_t = self.t[lower_ti]
+    new_t = self.h_tris[lower_ti].realized_along_gi(gi, j)
+    new_t = CoveringTri(new_t, lower_ti, 3*[None], 3*[None])
+    new_t.i_edges[j] = lifted_ei
+    new_t.i_verts[j] = ( (lifted_e.source if s>0 else lifted_e.dest), lower_t.i_verts[j][1])
+    new_t.i_verts[(j+1)%3] = ( (lifted_e.dest if s>0 else lifted_e.source), lower_t.i_verts[(j+1)%3][1] )
+    ov = None
+    
+    #determine if the edge before exists
+    pviv = self.v[new_t.i_verts[j][0]].i_verts
+    pe = pviv[ (new_t.i_verts[j][1] + 1)%len(pviv) ]
+    jm1 = (j-1)%3
+    if pe != None:
+      new_t.i_edges[jm1] = -pe
+      ov = (self.em_e[pe.ind].dest if pe.sign>0 else self.em_e[pe.ind].source)
+    else:
+      new_t.i_edges[jm1] = SI( len(self.em_e), lower_t.i_edges[jm1].sign )
+      self.e_lifts[lower_t.i_edges[jm1].ind].append( len(self.em_e) )
+      self.em_e.append(CoveringEdge(None,None,None,None,None,None))
+    
+    #determine if the next edge exists
+    jp1 = (j+1)%3
+    nviv = self.v[new_t.i_verts[jp1][0]]
+    ne = nviv[ (new_t.i_verts[jp1][1] - 1)%len(nviv)]
+    if ne != None:
+      new_t.i_edges[jp1] = ne
+      ov = (self.em_e[ne.ind].dest if ne.sign>0 else self.em_e[ne.ind].source)
+    else:
+      new_t.i_edges[jp1] = SI( len(self.em_e), lower_t.i_edges[jp1].sign )
+      self.e_lifts[lower_t.i_edges[jp1].ind].append( len(self.em_e) )
+      self.em_e.append(CoveringEdge(None,None,None,None,None,None))
+    
+    #determine if the other vertex exists
+    if ov != None:
+      new_t.i_verts[(j+2)%3] = ( ov, lower_t.i_verts[(j+2)%3][1] )
+    else:
+      new_t.i_verts[(j+2)%3] = ( len(self.em_v), lower_t.i_verts[(j+2)%3][1] )
+      lower_vi = lower_t.i_verts[(j+2)%3][0]
+      self.v_lifts[lower_vi].append(len(self.em_v))
+      self.em_v.append( CoveringVertex( None, None, len(self.v[lower_vi].i_edges)*[None], len(self.v[lower_vi].i_tris)*[None]) )
+    
+    new_ti = len(self.em_t)
+    self.em_t.append(new_t)
+    self.t_lifts[lower_ti].append(new_ti)
+    
+    #now go around and fill in all relevant info all the way around
+    #this may overwrite stuff, but it *should* be the same
+    IV = new_t.i_verts
+    IE = new_t.i_edges
+    for i in xrange(3):
+      #fill in vert
+      vi,j = IV[i]
+      v = self.em_v[vi]
+      v.pt = new_t.t.v[i]
+      v.covered_v = lower_t.i_verts[i][0]
+      v.i_edges[j] = new_t.i_edges[j]
+      v.i_edges[(j-1)%len(v.i_edges)] = -new_t.i_edges[(j-1)%3]
+      v.i_tris[j] = (new_ti, i)
+      #fill in edge
+      ei = IE[i]
+      e = self.em_e[ei.ind]
+      if e.gi == None:
+        e.gi = (new_t.t.sides[i] if ei.sign>0 else new_t.t.sides[i].reversed())
+      e.covered_e = lower_t.i_edges[i].ind 
+      e.source = (new_t.i_verts[i][0] if ei.sign>0 else new_t.i_verts[(i+1)%3][0])
+      e.dest = (new_t.i_verts[(i+1)%3][0] if ei.sign>0 else new_t.i_verts[i][0])
+      if ei.sign>0:
+        e.on_left = (new_ti, i)
+      else:
+        e.on_right = (new_ti, i)
+
         
-        
-  def relay(self, method='vertices'):
+  def relay(self):
     num_edges = len(self.e)
-    self.em_v = [[] for _ in xrange(len(self.v))]
-    #this gives the geodesic intervals on the left, right, respectively
-    self.em_e = [[None,None] for _ in xrange(len(self.e))] 
-    self.em_t = [None for _ in xrange(len(self.t))]
-    self.e_single_lifts = [None for _ in xrange(len(self.e))]
+    self.em_v = []
+    self.v_lifts = [[] for v in self.v]
+    self.em_e = []
+    self.e_lifts = [[] for e in self.e]
+    self.em_t = []
+    self.t_lifts = [[] for t in self.t]
     
-    if method=='edges':
-      #place edge 0 going straight up from 0
-      p1 = complex(0,1)
-      p2 = hyp.point_at_vertical_distance(complex(0,1), self.h_lengths[0])
-      gi = hyp.HypGeodesicInterval(p1,p2).reversed()
-      ti,j = self.e[0].on_right
-      self.attach_triangle_to_gi(ti, j, gi)
-      while True:
-        #find the edge which is (1) half glued and (2) the median Euclidean size
-        half_glued_edges = []
-        for i in xrange(num_edges):
-          if None in self.em_e[i] and self.em_e[i] != [None,None]:
-            if self.em_e[i][0] == None:
-              half_glued_edges.append( (i, self.em_e[i][1].Euclidean_length()) )
-            else:
-              half_glued_edges.append( (i, self.em_e[i][0].Euclidean_length()) )
-        if len(half_glued_edges)==0:
-          break
-        half_glued_edges.sort(key=lambda x: x[1])
-        edge_to_glue = half_glued_edges[len(half_glued_edges)/2][0]
-        side_to_glue = (0 if self.em_e[edge_to_glue][0] == None else 1) #0 means glue left
-        ti,j = (self.e[edge_to_glue].on_right if side_to_glue == 1 else self.e[edge_to_glue].on_left)
-        gi = self.em_e[edge_to_glue][1-side_to_glue].reversed()
-        #print "Edge to glue: ", edge_to_glue
-        #print "Side to glude: ", side_to_glue
-        #print "Attaching triangle", ti, j, "to", gi, "of length", gi.length
-        #print "Triangle: ", self.h_tris[ti]
-        self.attach_triangle_to_gi(ti, j, gi)
+    first_vertex = self.find_isolated_vertex()
+    if first_vertex == None:
+      first_vertex = self.highest_valence_vertex()
     
-    elif method=='vertices':
-      first_vertex = self.find_isolated_vertex()
-      if first_vertex == None:
-        first_vertex = self.highest_valence_vertex()
-      gi = hyp.HypGeodesicInterval.from_pt_angle_dist(1j, math.pi/2.0, self.h_lengths[self.v[first_vertex].i_edges[0].ind])
-      for i,ei in enumerate(self.v[first_vertex].i_edges):
-        ti,j = self.v[first_vertex].i_tris[i]
-        if self.em_t[ti] != None:
-          break
-        self.attach_triangle_to_gi(ti,j,gi)
-        gi = self.em_t[ti].sides[(j-1)%3].reversed()
-        #print "Placed triangle", ti,j, " around first vertex", first_vertex
-      while True:
-        self.clean_vertices()
-        #vertex preference (1) isolated and appears once (2) appears once
-        current_v = None
-        partially_done = [i for i in xrange(len(self.v)) if not self.is_vertex_surrounded(i)]
-        appears_once = [i for i in partially_done if self.em_v[i] != None and len(self.em_v[i])==1]
-        isolated = [i for i in appears_once if self.is_isolated_vertex(i)]
-        #print "Found partially done, appears once, and isolated:"
-        #print partially_done, appears_once, isolated
-        if len(isolated)>0:
-          current_v = iso_appear_once[0]
-        elif len(appears_once)>0:
-          current_v = iso_appear_once[0]
-        elif len(partially_done)>0:
-          current_v = partially_done[0]
-        else:
-          break
-        #find the first unplaced triangle, and go from there
-        IT = self.v[current_v].i_tris
-        LIT = len(IT)
-        i=0
-        while self.em_t[IT[i][0]]==None:
-          i = (i+1)%LIT
-        while self.em_t[IT[i][0]]!=None:
-          i = (i+1)%LIT
-        while self.em_t[ IT[i][0] ] == None:
-          ti,j = IT[i]
-          prev_ti, prev_j = IT[(i-1)%LIT]
-          gi = self.em_t[prev_ti].sides[(prev_j-1)%3].reversed()
-          self.attach_triangle_to_gi(ti, j, gi)
-          #print "Placed triangle", ti,j, " around vertex", current_v
-          i = (i+1)%LIT
-      #end of vertices method
-    self.clean_vertices()
-    for ei in xrange(len(self.e)):
-      self.e_single_lifts[ei] = hyp.same_float(self.em_e[ei][0].start, self.em_e[ei][1].end,tol=1e-6)
+    #lift the first triangle so the first edge happens to go straight up
+    T = self.t[0]
+    IE = T.i_edges
+    gi = hyp.HypGeodesicInterval.from_pt_angle_dist(1j, math.pi/2.0, self.h_lengths[IE[0].ind])
+    if IE[0].sign < 0:
+      giR = gi.reversed()
+    new_t = CoveringTri( self.h_tris[0].realize_along_gi(gi, 0), 0, 3*[None], 3*[None] )
+    new_es = [None, None, None]
+    new_vs = [None, None, None]
+    self.t_lifts[0].append(0)
+    for i in xrange(3):
+      new_es[i] = CoveringEdge( (new_t.t.sides[i] if IE[i].sign > 0 else new_t.t.sides[i].reversed()), \
+                                IE[i].ind,                           \
+                                (i if IE[i].sign > 0 else (i+1)%3),          \
+                                ((i+1)%3 if IE[i].sign > 0 else i),          \
+                                (0 if IE[i].sign > 0 else None),             \
+                                (None if IE[i].sign > 0 else 0) )
+      new_t.i_edges[i] = SI(i, IE[i].sign)
+      self.e_lifts[IE[i].ind].append(i)
+      cvi = T.i_verts[i]
+      new_vs[i] = CoveringVertex( new_t.t.v[i], cvi[0],                        \
+                                  len(self.v[cvi[0]].i_edges)*[None],        \
+                                  len(self.v[cvi[0]].i_tris)*[None] )
+      new_vs[i].i_tris[cvi[1]] = (0, i)
+      new_vs[i].i_edges[cvi[1]] = SI(i, IE[i].sign)
+      new_vs[i].i_edges[(cvi[1]+1)%len(new_vs[i].i_edges)] = SI((i-1)%3, -IE[(i-1)%3].sign)
+      new_t.i_verts[i] = (i, cvi[1])
+      self.v_lifts[cvi[0]].append(i)
+    self.em_v.extend(new_vs)
+    self.em_e.extend(new_es)
+    self.em_t.append(new_t)
+    
+    while True:
+      #find a vertex which is (in increasing order of desirability and rarity):
+      #lifted
+      #partially lifted
+      #appears in the cover only once so far
+      #isolated topologically
+      lifted = [i for i in xrange(len(self.v)) if len(self.v_lifts[i])>0]
+      partially_lifted = [i for i in lifted if not self.is_vertex_surrounded(i)]
+      appears_once = [i for i in partially_lifted if len(self.v_lifts[i])==1]
+      isolated = [i for i in appears_once if self.is_isolated_vertex(i)]
+      current_v = (isolated[0] if len(isolated)>0 else                         \
+                  (appears_once[0] if len(appears_once)>0 else                 \
+                  (partially_lifted[0] if len(partially_lifted)>0 else None)))
+      if current_v == None:
+        break
+      
+      #go around the vertex to find a triangle which hasn't been placed
+      i=0
+      IT = self.v[current_v].i_tris
+      IE = self.v[current_v].i_edges
+      LIT = len(IT)
+      while len(self.t_lifts[IT[i][0]])==0:
+        i = (i+1)%LIT
+      while len(self.t_lifts[IT[i][0]])>0:
+        i = (i+1)%LIT
+      while len(self.t_lifts[IT[i][0]])==0:
+        im1 = (i-1)%LIT
+        lifted_ti = self.t_lifts[IT[im1][0]][0]
+        lifted_t = self.em_t[lifted_ti]
+        lifted_ei = -lifted_t.i_edges[ (IT[im1][1]-1)%3 ]
+        #attach this triangle
+        self.lift_triangle_to_lifted_edge(lifted_ei)
+        i = (i+1)%LIT
     return
+      
       
   def __repr__(self):
     return str(self)

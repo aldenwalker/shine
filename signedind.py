@@ -6,4 +6,6 @@ class SignedInd:
     return str(self) #"SignedInd(" + str(self.ind) + "," + str(self.sign) + ")"
   def __str__(self):
     return ("-" if self.sign < 0 else "") + str(self.ind)
+  def __neg__(self):
+    return SignedInd(self.ind, -self.sign)
   
