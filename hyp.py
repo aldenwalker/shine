@@ -154,7 +154,7 @@ class HypTri:
     pp2 = point_angle_dist(p2, A2, d2)
     #print "First point ", p1, A1, d1, " -> ", pp1
     #print "Second point ", p2, A2, d2, " -> ", pp2
-    if (not same_float(pp1.real, pp2.real)) or (not same_float(pp1.imag, pp2.imag)):
+    if (not same_float(pp1.real, pp2.real,tol=1e-7)) or (not same_float(pp1.imag, pp2.imag,tol=1e-7)):
       raise ValueError("Doesn't seem to be the same going from both sides?")
     vs = [p1, p2, pp1]
     #rotate right so it aligns with the topological triangle

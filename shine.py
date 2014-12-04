@@ -1,3 +1,4 @@
+import hyp
 import tsurf
 import gsurf
 import liftedsurf
@@ -10,6 +11,8 @@ def arc_disjoint_from_box(cc, cr, ca1, ca2, br, bh ) :
   """is the circular arc at center cc, radius cr, between angles ca1, ca2
   disjoint from the box with bottom center at 0, horiz radius br, and 
   height bh?"""
+  if cr == 'inf':
+    return not (abs(cc) < br and min(ca1,ca2) < bh)
   left_e = cc - cr
   right_e = cc + cr
   left_in = abs(left_e) < br
@@ -91,14 +94,14 @@ class SurfaceVisualizer:
     self.draw_complex_height = self.draw_height / self.draw_scale
     self.redraw()
         
-  def draw_point(self, p, col):
-    t_p = self.draw_trans(p)
+  def draw_point(self, p, col, do_trans=True):
+    t_p = (p if not do_trans else self.draw_trans(p))
     pp = self.draw_complex_to_canvas(t_p)
     di = self.canvas.create_oval(pp[0]-2,pp[1]-2,pp[0]+2,pp[1]+2,fill=col)
     self.drawing_items.append(di)
   
-  def draw_geodesic_segment(self, gi, thickness=1):
-    trans_gi = gi.act_by_mobius(self.draw_trans)
+  def draw_geodesic_segment(self, gi, thickness=1, do_trans=True):
+    trans_gi = (gi if not do_trans else gi.act_by_mobius(self.draw_trans))
     #print "Drawing geodesic segment: ", gi
     #print "After trans: ", trans_gi
     if trans_gi.vertical:
@@ -127,66 +130,74 @@ class SurfaceVisualizer:
       self.canvas.delete(di)
     self.drawing_items = []
     
-    self.propagate_lift()
-    
+    self.e_lifts = []
     for ei, (gi_left, gi_right) in enumerate(self.LS.em_e):
-      if self.e_single_lifts[ei]:
+      if self.LS.e_single_lifts[ei]:
         self.draw_geodesic_segment(gi_left, thickness=1)
       else:
+        self.e_lifts.append( (ei, gi_left.act_by_mobius(self.draw_trans), [1,0]) )
         self.draw_geodesic_segment(gi_left, thickness=2)
+        self.e_lifts.append( (ei, gi_right.act_by_mobius(self.draw_trans), [0,1]) )
         self.draw_geodesic_segment(gi_right, thickness=2)
     for vi,V in enumerate(self.LS.em_v):
       c = self.draw_colors[vi%len(self.draw_colors)]
       for p in V:
         self.draw_point(p,c)
+    
+    self.propagate_lifts()
+    
+    for ei, gi in self.e_lifts:
+      self.draw_geodesic_segment(gi, thickness=1, do_trans=False)
+    
   
-  def propagate_lift(self):
+  def propagate_lifts(self):
     """using the current drawing stuff, propagate the triangles so that they 
-    will cover the entire region"""
-    self.e_lifts = []
+    will cover the entire region; this assume self.e_lifts contains the 
+    current boundary"""
     self.t_lifts = []
     self.v_lifts = []
-    putative_lifts = []
-    #record all the edges on the outside of the fundamental domain
-    for ei in xrange(len(self.LS.e)):
-      if self.LS.e_single_lifts[ei]:
-        continue
-      gi1, gi2 = self.LS.em_e[ei]
-      putative_lifts.append( (ei, [gi1, None]) )
-      putative_lifts.append( (ei, [None, gi2]) )
+    putative_lifts = [x for x in self.e_lifts]
+    self.e_lifts = []
+    e_lift_points = [[] for x in self.LS.e]
     while len(putative_lifts)>0:
-      ei, [gL,gR] = putative_lifts.pop()
-      gi = (gL if gL!=None else gR)
-      if self.disjoint_from_drawing(gi):
+      ei, gi, [on_L, on_R] = putative_lifts.pop()
+      if self.disjoint_from_drawing(gi, do_trans=False):
         continue
-      if gL!=None:
-        gLr = gL.reversed()
+      if any([hyp.same_float(gi.start, elsp[0], tol=1e-4) and \
+              hyp.same_float(gi.end, elsp[1], tol=1e-4) for elsp in e_lift_points[ei]]):
+        continue
+      if on_L!=0:
+        gLr = gi.reversed()
         ti,j = self.LS.e[ei].on_right
         print "Adding triangle ", self.LS.h_tris[ti]
         print "To edge", ti,j
         print "Length", gLr.length
         print "Elength", gLr.Euclidean_length()
+        print "All start points: ", e_lift_points[ei]
         new_tri = self.LS.h_tris[ti].realize_along_gi(gLr, j)
-        self.e_lifts.append( (ei, [gL, gLr]) )
+        self.e_lifts.append( (ei, gi) )
+        e_lift_points[ei].append( (gi.start, gi.end) )
       else:
-        gRr = gR.reversed()
         ti,j = self.LS.e[ei].on_left
-        new_tri = self.LS.h_tris[ti].realize_along_gi(gRr, j)
-        self.e_lifts.append( (ei, [gRr, gR]) )      
+        new_tri = self.LS.h_tris[ti].realize_along_gi(gi, j)
+        self.e_lifts.append( (ei, gi )  )   
+        e_lift_points[ei].append( (gi.start, gi.end) ) 
       self.t_lifts.append( (ti, new_tri) )
       jp1, jp2 = (j+1)%3, (j+2)%3
       pl1 = self.LS.t[ti].i_edges[jp1]
-      pl1 = (pl1.ind, ([new_tri.sides[jp1], None] if pl1.sign>0 else [None, new_tri.sides[jp1].reversed()]))
+      pl1 = ((pl1.ind, new_tri.sides[jp1], [1,0]) if pl1.sign>0 else \
+             (pl1.ind, new_tri.sides[jp1].reversed(), [0,1]))
       pl2 = self.LS.t[ti].i_edges[jp2]
-      pl2 = (pl2.ind, ([new_tri.sides[jp2], None] if pl2.sign>0 else [None, new_tri.sides[jp2].reversed()]))
+      pl2 = ((pl2.ind, new_tri.sides[jp2], [1,0]) if pl2.sign>0 else \
+             (pl2.ind, new_tri.sides[jp2].reversed(), [0,1]))
       putative_lifts.extend([pl1,pl2])
     
-  def disjoint_from_drawing(self, gi):
+  def disjoint_from_drawing(self, gi, do_trans=True):
     """True if the geodesic interval is disjoint from the drawing 
     (note this applies transformations, etc) (also true if it would be 
     really small)"""
-    t_gi = gi.act_by_mobius(self.draw_trans)
-    if t_gi.Euclidean_length() < 0.05:
+    t_gi = (gi if not do_trans else gi.act_by_mobius(self.draw_trans))
+    if t_gi.Euclidean_length() < 1:
       return True
     return arc_disjoint_from_box(t_gi.circ_center, t_gi.circ_radius,        \
                                  t_gi.circ_angle1, t_gi.circ_angle2,       \

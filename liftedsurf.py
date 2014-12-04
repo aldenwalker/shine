@@ -132,7 +132,7 @@ class LiftedSurface(gsurf.GeoSurface):
       #end of vertices method
     self.clean_vertices()
     for ei in xrange(len(self.e)):
-      self.e_single_lifts[ei] = self.em_e[ei][0].same_but_reversed(self.em_e[ei][1])
+      self.e_single_lifts[ei] = hyp.same_float(self.em_e[ei][0].start, self.em_e[ei][1].end,tol=1e-6)
     return
       
   def __repr__(self):
