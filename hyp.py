@@ -143,8 +143,8 @@ class HypTri:
   def realize_along_gi(self, gi, side_ind):
     """return an embedded hyperbolic triangle in which side side_ind
     lies along the geodesic interval gi"""
-    if not same_float(gi.length, self.lengths[side_ind]):
-      raise ValueError("Can't realize it because the edge isn't the right size")
+    if not same_float(gi.length, self.lengths[side_ind],tol=1e-7):
+      raise ValueError("Can't realize it because the edge" + str(gi.length) + "isn't the right size" + str(self.lengths[side_ind]))
     #print "Realizing triangle ", self
     #print "With edge", side_ind
     #print "Along gi:", gi, " of length", gi.length

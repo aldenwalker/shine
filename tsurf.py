@@ -152,7 +152,17 @@ class TopSurface :
     L.sort(key=lambda x:x[1])
     return L[-1][0]
 
+  def is_isolated_vertex(self, vi):
+    """an isolated vertex has the property that none of its incident 
+    edges touch it twice"""
+    E = [ei.ind for ei in self.v[vi].i_edges]
+    return len(E) == len(set(E))
 
+  def find_isolated_vertex(self):
+    for vi in xrange(len(self.v)):
+      if self.is_isolated_vertex(vi):
+        return vi
+    return None
 
 
 

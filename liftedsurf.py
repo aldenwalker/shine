@@ -4,17 +4,18 @@ import hyp
 import math
 
 class LiftedSurface(gsurf.GeoSurface):
-  def __init__(self, GS, ev, ee, et):
+  def __init__(self, GS, ev, ee, et, e_single_lifts):
     self.v, self.e, self.t = GS.v, GS.e, GS.t
     self.h_tris, self.h_lengths = GS.h_tris, GS.h_lengths
     self.em_v = ev
     self.em_e = ee
     self.em_t = et
+    self.e_single_lift = e_single_lifts
   
   @classmethod
-  def lift_gsurf(cls, GS):
-    LS = cls(GS, None, None, None)
-    LS.relay()
+  def lift_gsurf(cls, GS, method='vertices'):
+    LS = cls(GS, None, None, None, None)
+    LS.relay(method=method)
     return LS
   
   def clean_vertices(self):
@@ -28,6 +29,7 @@ class LiftedSurface(gsurf.GeoSurface):
       self.em_v[i] = new_points
   
   def is_vertex_surrounded(self, vi):
+    """are all adjacent triangles placed?"""
     return all([self.em_t[ti] != None for ti,j in self.v[vi].i_tris])
   
   def attach_triangle_to_gi(self, ti, i, gi):
@@ -46,12 +48,13 @@ class LiftedSurface(gsurf.GeoSurface):
     return
         
         
-  def relay(self, method='edges'):
+  def relay(self, method='vertices'):
     num_edges = len(self.e)
     self.em_v = [[] for _ in xrange(len(self.v))]
     #this gives the geodesic intervals on the left, right, respectively
     self.em_e = [[None,None] for _ in xrange(len(self.e))] 
     self.em_t = [None for _ in xrange(len(self.t))]
+    self.e_single_lifts = [None for _ in xrange(len(self.e))]
     
     if method=='edges':
       #place edge 0 going straight up from 0
@@ -83,9 +86,9 @@ class LiftedSurface(gsurf.GeoSurface):
         self.attach_triangle_to_gi(ti, j, gi)
     
     elif method=='vertices':
-      #place the highest-valence vertex at i
-      #and its 0th edge going straight up
-      first_vertex = self.highest_valence_vertex()
+      first_vertex = self.find_isolated_vertex()
+      if first_vertex == None:
+        first_vertex = self.highest_valence_vertex()
       gi = hyp.HypGeodesicInterval.from_pt_angle_dist(1j, math.pi/2.0, self.h_lengths[self.v[first_vertex].i_edges[0].ind])
       for i,ei in enumerate(self.v[first_vertex].i_edges):
         ti,j = self.v[first_vertex].i_tris[i]
@@ -93,36 +96,43 @@ class LiftedSurface(gsurf.GeoSurface):
           break
         self.attach_triangle_to_gi(ti,j,gi)
         gi = self.em_t[ti].sides[(j-1)%3].reversed()
-        print "Placed triangle", ti,j, " around first vertex", first_vertex
+        #print "Placed triangle", ti,j, " around first vertex", first_vertex
       while True:
         self.clean_vertices()
-        #try to find a vertex which only appears once
-        #and it not completely surrounded
-        single_vs = [i for i in xrange(len(self.em_v)) if self.em_v[i] != None and len(self.em_v[i])==1]
-        single_vs = [i for i in single_vs if not self.is_vertex_surrounded(i)]
-        if len(single_vs) > 0:
-          current_v = single_vs[0]
+        #vertex preference (1) isolated and appears once (2) appears once
+        current_v = None
+        partially_done = [i for i in xrange(len(self.v)) if not self.is_vertex_surrounded(i)]
+        appears_once = [i for i in partially_done if self.em_v[i] != None and len(self.em_v[i])==1]
+        isolated = [i for i in appears_once if self.is_isolated_vertex(i)]
+        #print "Found partially done, appears once, and isolated:"
+        #print partially_done, appears_once, isolated
+        if len(isolated)>0:
+          current_v = iso_appear_once[0]
+        elif len(appears_once)>0:
+          current_v = iso_appear_once[0]
+        elif len(partially_done)>0:
+          current_v = partially_done[0]
         else:
-          partially_placed_vs = [i for i in xrange(len(self.v)) if not self.is_vertex_surrounded(i)]
-          if len(partially_placed_vs)==0:
-            break
-          current_v = partially_placed_vs[0]
+          break
         #find the first unplaced triangle, and go from there
         IT = self.v[current_v].i_tris
+        LIT = len(IT)
         i=0
-        while self.em_t[ IT[i][0] ] == None:
-          i += 1
-        while self.em_t[ IT[i][0] ] != None:
-          i += 1
+        while self.em_t[IT[i][0]]==None:
+          i = (i+1)%LIT
+        while self.em_t[IT[i][0]]!=None:
+          i = (i+1)%LIT
         while self.em_t[ IT[i][0] ] == None:
           ti,j = IT[i]
-          prev_ti, prev_j = IT[(i-1)%len(IT)]
+          prev_ti, prev_j = IT[(i-1)%LIT]
           gi = self.em_t[prev_ti].sides[(prev_j-1)%3].reversed()
           self.attach_triangle_to_gi(ti, j, gi)
           #print "Placed triangle", ti,j, " around vertex", current_v
-          i += 1
+          i = (i+1)%LIT
       #end of vertices method
     self.clean_vertices()
+    for ei in xrange(len(self.e)):
+      self.e_single_lifts[ei] = self.em_e[ei][0].same_but_reversed(self.em_e[ei][1])
     return
       
   def __repr__(self):
