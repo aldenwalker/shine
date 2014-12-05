@@ -122,6 +122,15 @@ class HypGeodesicInterval:
   def act_by_mobius(self, M):
     return HypGeodesicInterval(M(self.start), M(self.end))
   
+  def pt_along(self, t):
+    """t in [0,1]; this gives a parameterization"""
+    if self.vertical:
+      return self.start + t*(self.end - self.start)
+    a = self.circ_angle1 + t*(self.circ_angle2 - self.circ_angle1)
+    cc = self.circ_center
+    cr = self.circ_radius
+    return complex( cc + cr*math.cos(a), cr*math.sin(a) )
+  
   def __repr__(self):
     return str(self)
   
@@ -172,6 +181,9 @@ class EmHypTri(HypTri):
   def from_vertices(cls, em_V):
     GIs = [HypGeodesicInterval(em_V[i], em_V[(i+1)%3]) for i in xrange(3)]
     return cls(GIs)
+  
+  def act_by_mobius(self, M):
+    return EmHypTri([gi.act_by_mobius(M) for gi in self.sides])
   
   def __repr__(self):
     return str(self)

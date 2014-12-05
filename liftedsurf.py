@@ -86,7 +86,7 @@ class LiftedSurface(gsurf.GeoSurface):
     gi = (lifted_e.gi if s>0 else lifted_e.gi.reversed())
     lower_ti,j = (lower_e.on_left if s>0 else lower_e.on_right)
     lower_t = self.t[lower_ti]
-    new_t = self.h_tris[lower_ti].realized_along_gi(gi, j)
+    new_t = self.h_tris[lower_ti].realize_along_gi(gi, j)
     new_t = CoveringTri(new_t, lower_ti, 3*[None], 3*[None])
     new_t.i_edges[j] = lifted_ei
     new_t.i_verts[j] = ( (lifted_e.source if s>0 else lifted_e.dest), lower_t.i_verts[j][1])
@@ -94,8 +94,8 @@ class LiftedSurface(gsurf.GeoSurface):
     ov = None
     
     #determine if the edge before exists
-    pviv = self.v[new_t.i_verts[j][0]].i_verts
-    pe = pviv[ (new_t.i_verts[j][1] + 1)%len(pviv) ]
+    pvie = self.em_v[new_t.i_verts[j][0]].i_edges
+    pe = pvie[ (new_t.i_verts[j][1] + 1)%len(pvie) ]
     jm1 = (j-1)%3
     if pe != None:
       new_t.i_edges[jm1] = -pe
@@ -107,8 +107,8 @@ class LiftedSurface(gsurf.GeoSurface):
     
     #determine if the next edge exists
     jp1 = (j+1)%3
-    nviv = self.v[new_t.i_verts[jp1][0]]
-    ne = nviv[ (new_t.i_verts[jp1][1] - 1)%len(nviv)]
+    nvie = self.em_v[new_t.i_verts[jp1][0]].i_edges
+    ne = nvie[ new_t.i_verts[jp1][1] ]
     if ne != None:
       new_t.i_edges[jp1] = ne
       ov = (self.em_e[ne.ind].dest if ne.sign>0 else self.em_e[ne.ind].source)
@@ -140,8 +140,8 @@ class LiftedSurface(gsurf.GeoSurface):
       v = self.em_v[vi]
       v.pt = new_t.t.v[i]
       v.covered_v = lower_t.i_verts[i][0]
-      v.i_edges[j] = new_t.i_edges[j]
-      v.i_edges[(j-1)%len(v.i_edges)] = -new_t.i_edges[(j-1)%3]
+      v.i_edges[j] = new_t.i_edges[i]
+      v.i_edges[(j+1)%len(v.i_edges)] = -new_t.i_edges[(i-1)%3]
       v.i_tris[j] = (new_ti, i)
       #fill in edge
       ei = IE[i]
@@ -237,7 +237,15 @@ class LiftedSurface(gsurf.GeoSurface):
         i = (i+1)%LIT
     return
       
-      
+  def act_by_mobius(self, M):
+    for v in self.em_v:
+      v.pt = M(v.pt)
+    for e in self.em_e:
+      e.gi = e.gi.act_by_mobius(M)
+    for t in self.em_t:
+      t.t = t.t.act_by_mobius(M)
+    return None
+  
   def __repr__(self):
     return str(self)
   
@@ -245,16 +253,25 @@ class LiftedSurface(gsurf.GeoSurface):
     ans = "Lifted Surface:"
     ans += "Vertices: \n"
     for i,V in enumerate(self.v):
-      ans += str(i) + ": " + str(V) + " Realized: " + str(self.em_v[i]) + "\n"
+      ans += str(i) + ": " + str(V) + "\n"
+      ans += "covered by: " + str(self.v_lifts[i]) + "\n"
     ans += "\nEdges: \n"
     for i,E in enumerate(self.e):
-      ans += str(i) + ": " + str(E) + " Length: " + str(self.h_lengths[i]) + "\n"
-      ans += "  Realized: " + str(self.em_e[i][0]) + "\n"
+      ans += str(i) + ": " + str(E) + "\n"
+      ans += "covered by: " + str(self.e_lifts[i]) + "\n"
     ans += "\nTriangles: \n"
     for i,T in enumerate(self.t):
       ans += str(i) + ": " + str(T) + "\n"
-      ans += "    HypTri: " + str(self.h_tris[i]) + "\n"
-      ans += "    Realized: " + str(self.em_t[i]) + "\n"
+      ans += "covered by: " + str(self.t_lifts[i]) + "\n"
+    ans += "Covering vertices:\n"
+    for i,CV in enumerate(self.em_v):
+      ans += str(i) + ": " + str(self.em_v[i]) + "\n"
+    ans += "Covering edges:\n"
+    for i,CE in enumerate(self.em_e):
+      ans += str(i) + ": " + str(self.em_e[i]) + "\n"
+    ans += "Covering triangles:\n"
+    for i,CT in enumerate(self.em_t):
+      ans += str(i) + ": " + str(self.em_t[i]) + "\n"
     return ans
     
     
