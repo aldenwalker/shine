@@ -2,6 +2,7 @@ import hyp
 import tsurf
 import gsurf
 import liftedsurf
+import emsurf
 import mobius
 
 import math

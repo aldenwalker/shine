@@ -128,7 +128,44 @@ class TopSurface :
           v.i_tris[j] = OR
           T[OR[0]].i_verts[OR[1]] = (i,j)   
     return cls(V,E,T)    
+  
+  def attach_triangle_at(self, VI, I ):
+    """place a new triangle with 0th vertex at vi in position i"""
+    i_verts = [(VI, I), None, None]
+    i_edges = [None,None,None]
+    for j in xrange(3):
+      vi,i = i_verts[j]
+      ei = self.v[ vi ].i_edges[i]
+      e = self.e[ei.ind]
+      i_edges[j] = ei
+      ov = (e.dest if ei.sign>0 else e.source)
+      ovi = self.v[ov].i_edges.index( -ei )
+      ovi = (ovi-1)%len(self.v[ov].i_edges)
+      i_verts[(j+1)%3] = (ov, ovi)
     
+    for j in xrange(3):
+      self.v[ i_verts[j][0] ].i_tris[ i_verts[j][1] ] = (len(self.t),j)
+      if i_edges[j].sign>0:
+        self.e[ i_edges[j].ind ].on_left = (len(self.t), j)
+      else :
+        self.e[ i_edges[j].ind ].on_right = (len(self.t), j)
+    
+    self.t.append( Triangle(i_verts, i_edges) )
+    return
+  
+  def fill_in_triangles(self):
+    """fill in any triangles that aren't there, as detected by looking for """
+    v_to_fill = [i for i,v in enumerate(self.v) if None in v.i_tris]
+    if not isinstance(self.t, list):
+      self.t = []
+    for vi in v_to_fill:
+      v = self.v[vi]
+      for i in xrange(len(v.i_tris)):
+        if v.i_tris[i] == None:
+          self.attach_triangle_at( vi, i )
+    return
+    
+  
   def __repr__(self):
     return str(self)
   

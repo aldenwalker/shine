@@ -8,4 +8,6 @@ class SignedInd:
     return ("-" if self.sign < 0 else "") + str(self.ind)
   def __neg__(self):
     return SignedInd(self.ind, -self.sign)
+  def __eq__(self, other):
+    return other != None and self.ind == other.ind and self.sign == other.sign
   
