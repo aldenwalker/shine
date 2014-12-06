@@ -6,6 +6,9 @@ from signedind import SignedInd as SI
 import math
 
 
+def hash_complex(p):
+  return ( int(1e4*p.real), int(1e4*p.imag) )
+
 
 class CoveringVertex(tsurf.Vertex):
   def __init__(self, pt, covered_v, iE, iT):
@@ -51,10 +54,11 @@ class LiftedSurface(gsurf.GeoSurface):
     self.v_lifts = v_lifts
     self.e_lifts = e_lifts
     self.t_lifts = t_lifts
+    self.v_hashes = dict([( hash_complex(v.pt), i) for i,v in enumerate(self.em_v)])
   
   @classmethod
   def lift_gsurf(cls, GS):
-    LS = cls(GS, None, None, None, None, None, None)
+    LS = cls(GS, [], [], [], [], [], [])
     LS.relay()
     return LS
   
@@ -95,7 +99,7 @@ class LiftedSurface(gsurf.GeoSurface):
     
     #determine if the edge before exists
     pvie = self.em_v[new_t.i_verts[j][0]].i_edges
-    pe = pvie[ (new_t.i_verts[j][1] + 1)%len(pvie) ]
+    pe = pvie[ (new_t.i_verts[j][1] + 1)%len(pvie) ] 
     jm1 = (j-1)%3
     if pe != None:
       new_t.i_edges[jm1] = -pe
@@ -118,6 +122,10 @@ class LiftedSurface(gsurf.GeoSurface):
       self.em_e.append(CoveringEdge(None,None,None,None,None,None))
     
     #determine if the other vertex exists
+    if ov == None:
+      #check if it's secretly there
+      ov_pt = new_t.t.sides[(j+2)%3].start
+      ov = self.v_hashes.get( hash_complex(ov_pt), None )
     if ov != None:
       new_t.i_verts[(j+2)%3] = ( ov, lower_t.i_verts[(j+2)%3][1] )
     else:
@@ -139,6 +147,7 @@ class LiftedSurface(gsurf.GeoSurface):
       vi,j = IV[i]
       v = self.em_v[vi]
       v.pt = new_t.t.v[i]
+      self.v_hashes[ hash_complex(v.pt) ] = vi
       v.covered_v = lower_t.i_verts[i][0]
       v.i_edges[j] = new_t.i_edges[i]
       v.i_edges[(j+1)%len(v.i_edges)] = -new_t.i_edges[(i-1)%3]
@@ -166,9 +175,9 @@ class LiftedSurface(gsurf.GeoSurface):
     self.em_t = []
     self.t_lifts = [[] for t in self.t]
     
-    first_vertex = self.find_isolated_vertex()
-    if first_vertex == None:
-      first_vertex = self.highest_valence_vertex()
+    vdata = [(i, self.is_isolated_vertex(i), len(v.i_edges)) for i,v in enumerate(self.v)]
+    vdata.sort(key=lambda x:(int(x[1]), x[2]), reverse=True)
+    first_vertex = vdata[0][0]
     
     #lift the first triangle so the first edge happens to go straight up
     T = self.t[0]
@@ -193,6 +202,7 @@ class LiftedSurface(gsurf.GeoSurface):
       new_vs[i] = CoveringVertex( new_t.t.v[i], cvi[0],                        \
                                   len(self.v[cvi[0]].i_edges)*[None],        \
                                   len(self.v[cvi[0]].i_tris)*[None] )
+      self.v_hashes[ hash_complex(new_vs[i].pt) ] = i
       new_vs[i].i_tris[cvi[1]] = (0, i)
       new_vs[i].i_edges[cvi[1]] = SI(i, IE[i].sign)
       new_vs[i].i_edges[(cvi[1]+1)%len(new_vs[i].i_edges)] = SI((i-1)%3, -IE[(i-1)%3].sign)
@@ -212,6 +222,8 @@ class LiftedSurface(gsurf.GeoSurface):
       partially_lifted = [i for i in lifted if not self.is_vertex_surrounded(i)]
       appears_once = [i for i in partially_lifted if len(self.v_lifts[i])==1]
       isolated = [i for i in appears_once if self.is_isolated_vertex(i)]
+      if len(isolated)>1:
+        isolated.sort(key=lambda x:len(self.v[x].i_edges), reverse=True)
       current_v = (isolated[0] if len(isolated)>0 else                         \
                   (appears_once[0] if len(appears_once)>0 else                 \
                   (partially_lifted[0] if len(partially_lifted)>0 else None)))
@@ -238,8 +250,10 @@ class LiftedSurface(gsurf.GeoSurface):
     return
       
   def act_by_mobius(self, M):
-    for v in self.em_v:
+    self.v_hashes = dict()
+    for i,v in enumerate(self.em_v):
       v.pt = M(v.pt)
+      self.v_hashes[hash_complex(v.pt)] = i
     for e in self.em_e:
       e.gi = e.gi.act_by_mobius(M)
     for t in self.em_t:

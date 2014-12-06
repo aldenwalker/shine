@@ -192,7 +192,11 @@ class EmbeddedSurface(tsurf.TopSurface):
       V[ vs ].i_edges[4] = SI(len(E),1)
       V[ vd ].i_edges[1] = SI(len(E),-1)
       E.append( tsurf.Edge( vs, vd, None, None ) )
-      
+    
+    #print "Before diagonals"
+    #print V
+    #print E
+    
     #create the diagonal edges
     for i,pe in enumerate(PG.e):
       src_index = PG.v[pe.src].i_edges.index( SI(i,1) )
@@ -211,7 +215,7 @@ class EmbeddedSurface(tsurf.TopSurface):
       
       vs = V_from_PG[pe.src]['top']
       vsi = V[vs].i_edges.index( SI(E_from_PG[i]['top'],1) )
-      vsi = (vsi+1)%len(V[vd].i_edges)
+      vsi = (vsi+1)%len(V[vs].i_edges)
       vd = V_from_PG[pe.dest]['around'][ (dest_index-1)%dest_val ]
       V[vs].i_edges.insert(vsi, SI(len(E),1))
       V[vs].i_tris.append(None)
@@ -229,7 +233,7 @@ class EmbeddedSurface(tsurf.TopSurface):
       
       vs = V_from_PG[pe.src]['bottom']
       vsi = V[vs].i_edges.index( SI(E_from_PG[i]['bottom'],1) )
-      vsi = (vsi+1)%len(V[vd].i_edges)
+      vsi = (vsi+1)%len(V[vs].i_edges)
       vd = V_from_PG[pe.dest]['around'][dest_index]
       V[vs].i_edges.insert(vsi, SI(len(E),1))
       V[vs].i_tris.append(None)
@@ -237,7 +241,7 @@ class EmbeddedSurface(tsurf.TopSurface):
       E.append( tsurf.Edge( vs, vd, None, None) )
     
     ES = cls( tsurf.TopSurface(V,E,[]), em_V, len(E)*[None], len(T)*[None])
-    print ES
+    #print ES
     ES.fill_in_triangles()
     
     ES.em_e = len(ES.e)*[None]

@@ -142,6 +142,8 @@ class TopSurface :
       ovi = self.v[ov].i_edges.index( -ei )
       ovi = (ovi-1)%len(self.v[ov].i_edges)
       i_verts[(j+1)%3] = (ov, ovi)
+    if i_verts[0] != (VI,I):
+      raise ValueError("triangle is weird")
     
     for j in xrange(3):
       self.v[ i_verts[j][0] ].i_tris[ i_verts[j][1] ] = (len(self.t),j)

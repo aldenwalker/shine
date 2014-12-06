@@ -1,4 +1,5 @@
 import math
+import random
 import scipy.optimize
 
 import hyp
@@ -13,25 +14,48 @@ class GeoSurface(tsurf.TopSurface):
     self.h_tris = [hyp.HypTri([lens[ei.ind] for ei in T.i_edges]) for T in self.t]
   
   @classmethod
-  def geometrize_tsurf(cls, TS, edge_hints=None, verbose=0):
+  def geometrize_tsurf(cls, TS, verbose=0):
     if TS.euler_char() >= 0:
       print "Only hyperbolic supported"
       return
     num_edges = len(TS.e)
     num_verts = len(TS.v)
     num_tris = len(TS.t)
-    if edge_hints == None:
-      desired_edge_lengths = [1 for i in xrange(num_edges)]
-    else:
-      desired_edge_lengths = [eh for eh in edge_hints]
     
     #optimization inputs
+    #edge lengths
+    #    def obj_fun(x):
+    #      return sum([(x[i]-desired_edge_lengths[i])**2 for i in xrange(len(x))])
+    #    def obj_fun_grad(x):
+    #      return [2*(x[i]-desired_edge_lengths[i]) for i in xrange(len(x))]
+    #    def f(x):
+    #      return [obj_fun(x), obj_fun_grad(x)]
+    
+    #angle deviations
     def obj_fun(x):
-      return sum([(x[i]-desired_edge_lengths[i])**2 for i in xrange(len(x))])
+      ans = 0
+      v_vals = [float(len(v.i_edges)) for v in TS.v]
+      for i,t in enumerate(TS.t):
+        Tlens = [x[ei.ind] for ei in t.i_edges]
+        Tangles = hyp.tri_angles(Tlens)
+        for j in xrange(3):
+          ans += (Tangles[j] - (6*math.pi/v_vals[t.i_verts[j][0]]))**2
+      return ans
     def obj_fun_grad(x):
-      return [2*(x[i]-desired_edge_lengths[i]) for i in xrange(len(x))]
+      ans = [0 for _ in xrange(len(x))]
+      v_targets = [6*math.pi/float(len(v.i_edges)) for v in TS.v]
+      for i,t in enumerate(TS.t):
+        Tlens = [x[ei.ind] for ei in t.i_edges]
+        Tangles = hyp.tri_angles(Tlens)
+        eis = t.i_edges
+        for j in xrange(3):
+          for k in xrange(3):
+            ans[eis[k].ind] += 2*(Tangles[j] - v_targets[t.i_verts[j][0]])*hyp.tri_angle_deriv(Tlens, j, k) 
+      return ans
     def f(x):
       return [obj_fun(x), obj_fun_grad(x)]
+
+
 
     cons = [dict() for _ in xrange(num_verts+3*num_tris )]
     #constraints from vertices (angles = 0)
@@ -67,7 +91,7 @@ class GeoSurface(tsurf.TopSurface):
         cons[num_verts + 3*j + k]['fun'] = this_func
         cons[num_verts + 3*j + k]['jac'] = this_jac
     
-    x0 = [k for k in desired_edge_lengths]
+    x0 = [1 for k in xrange(num_edges)]
     bounds = [(0,None) for i in xrange(num_edges)]
     res = scipy.optimize.minimize(f,                              \
                                   x0,           \
@@ -75,9 +99,10 @@ class GeoSurface(tsurf.TopSurface):
                                   bounds=bounds, \
                                   constraints=cons,               \
                                   method='SLSQP',                 \
-                                  options={'disp':True,'iprint':verbose})
+                                  options={'disp':True,'iprint':verbose, 'maxiter':200})
     if not res.success:
       print "Failed to find structure"
+      raise ValueError("Couldn't find structure")
       return None
     if verbose>0:
       print "Found structure"

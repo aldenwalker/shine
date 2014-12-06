@@ -7,6 +7,7 @@ import mobius
 
 import math
 import copy
+import random
 import Tkinter as tk
 
 def arc_disjoint_from_box(cc, cr, ca1, ca2, br, bh ) :
@@ -32,7 +33,14 @@ def arc_disjoint_from_box(cc, cr, ca1, ca2, br, bh ) :
   else:
     return (math.sqrt( (br-cc)**2 + bh**2 ) < cr and math.sqrt( (-br-cc)**2 + bh**2 ) < cr)
     
-
+def rand_bright_color():
+  patt = random.choice( [(1,0,0),(0,1,0),(0,0,1),(1,1,0),(1,0,1),(0,1,1)] )
+  x = random.uniform( *( (0.3,0.6) if patt[0]==0 else (0.9,1)) )
+  y = random.uniform( *( (0.3,0.6) if patt[1]==0 else (0.9,1)) )
+  z = random.uniform( *( (0.3,0.6) if patt[2]==0 else (0.9,1)) )
+  c = (int(255*x), int(255*y), int(255*z) )
+  return '#%02x%02x%02x' % c
+  
 
 class SurfaceVisualizer:
   def __init__(self, master, LS):
@@ -46,14 +54,18 @@ class SurfaceVisualizer:
     self.button_quit = tk.Button(self.master, text = 'Quit', command=self.quit)
     self.button_rotate_left = tk.Button(self.master, text="RotL", command=lambda : self.rotate('left'))
     self.button_rotate_right = tk.Button(self.master, text='RotR', command=lambda : self.rotate('right'))
+    self.draw_do_propagate = tk.IntVar()
+    self.check_propagate = tk.Checkbutton(self.master, text='Propagate', variable=self.draw_do_propagate, command=self.redraw)
+    self.draw_do_propagate.set(0)
     
-    self.master.rowconfigure(2, weight=1)
+    self.master.rowconfigure(3, weight=1)
     self.master.columnconfigure(0, weight=1)
     
-    self.canvas.grid(column=0, row=0, rowspan=3, sticky=tk.W+tk.E+tk.N+tk.S)
+    self.canvas.grid(column=0, row=0, rowspan=4, sticky=tk.W+tk.E+tk.N+tk.S)
     self.button_quit.grid(column=1, row=0, sticky=tk.N)
     self.button_rotate_left.grid(column=1, row=1)
     self.button_rotate_right.grid(column=2, row=1)
+    self.check_propagate.grid(column=1, row=2)
     
     #remember the surface 
     self.LS = LS
@@ -73,7 +85,8 @@ class SurfaceVisualizer:
     self.draw_trans = mobius.MobiusTrans(1,0,0,1)
     #the drawing the currently empty (but it will be filled by the canvas Configure)
     self.drawing_items = []
-    self.draw_colors = ['red','green','blue','cyan','yellow','magenta']
+    
+    self.draw_colors = [rand_bright_color() for _ in xrange(100)]
   
   
   ######################### drawing functions
@@ -158,8 +171,8 @@ class SurfaceVisualizer:
       #print "Stack: ", v_stack
       (i,v) = v_stack.pop()
       if (not self.draw_check_pt_in_window(v.pt)) or         \
-        (v.pt.imag < 0.1)                         or         \
-        (None not in v.i_tris):
+         (v.pt.imag < 0.25)                         or         \
+         (None not in v.i_tris):
         continue
       j = 0
       IT = v.i_tris
@@ -185,13 +198,14 @@ class SurfaceVisualizer:
     self.extended_LS = copy.deepcopy(self.LS)
     self.extended_LS.act_by_mobius(self.draw_trans)
     
-    self.propagate_surface()
+    if self.draw_do_propagate.get()==1:
+      self.propagate_surface()
     
-    for ti,t in enumerate(self.extended_LS.t):
+    for ti,t in enumerate(self.LS.t):
+      #for i,lti in enumerate(self.extended_LS.t_lifts[ti]):
+      #  self.draw_triangle(self.extended_LS.em_t[lti].t, ('#FFA0A0' if i==0 else '#FFF0F0'))
       lti = self.extended_LS.t_lifts[ti][0]
-      lt = self.extended_LS.em_t[lti]
-      col = '#FFA0A0'
-      self.draw_triangle(lt.t, col)
+      self.draw_triangle(self.extended_LS.em_t[lti].t, '#FFA0A0')
     
     for i,e in enumerate(self.extended_LS.em_e):
       if len(self.LS.e_lifts[e.covered_e])==1:
