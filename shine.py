@@ -289,10 +289,10 @@ class EmSurfaceVisualizer:
     self.button_rotate_left.grid(column=1, row=1)
     self.button_rotate_right.grid(column=2, row=1)
     
-    self.draw_viewer = R3.ProjectionViewer( R3.Vector([2,2,2]),              \
-                                            R3.Vector([-1,-1,-1]),              \
-                                            [R3.Vector([6, 7, 8])] )
-    
+    self.draw_viewer = R3.ProjectionViewer( R3.Vector([1,-1,3]),              \
+                                            R3.Vector([0,1,-1]),              \
+                                            [R3.Vector([0,0,3])] )
+    self.draw_transformation = R3.Matrix([[1,0,0],[0,1,0],[0,0,1]])
     self.draw_center = None
     self.draw_scale = 100.0
     self.draw_plane_hr = None
@@ -322,16 +322,27 @@ class EmSurfaceVisualizer:
     for di in self.drawing_items:
       self.canvas.delete(di)
     self.drawing_items = []
-    for ti,t in enumerate(self.ES.em_t):
-      pts, am = self.draw_viewer.project_triangle(t)
-      canvas_coords = [self.draw_plane_to_canvas(x) for x in pts]
+    acted_on_T = [[self.draw_transformation(x) for x in t] for t in self.ES.em_t]
+    pT = self.draw_viewer.project_triangles(acted_on_T)
+    for pt,am in pT:
+      canvas_coords = [self.draw_plane_to_canvas(x) for x in pt]
       flat_coord_list = [x for p in canvas_coords for x in p]
       grayscale = int(128*(am+1))
       rgb = '#%02x%02x%02x' % (grayscale, grayscale, grayscale)
       print "Drawing triangle: ", canvas_coords
       print "Amount: ", rgb
-      di = self.canvas.create_polygon(*flat_coord_list, fill=rgb, outline='black')
-
+      di = self.canvas.create_polygon(*flat_coord_list, fill='red', outline='black')
+      self.drawing_items.append(di)
+  
+  def rotate(self, dir):
+    if dir == 'left':
+      ang = math.pi/6
+    else:
+      ang = -math.pi/6
+    self.draw_transformation = self.draw_transformation*R3.Matrix([[math.cos(ang), -math.sin(ang), 0], \
+                                                                   [math.sin(ang), math.cos(ang), 0],  \
+                                                                   [0,0,1]])
+    self.redraw()
 
 def visualize_em_surface(ES):
   root = tk.Tk()

@@ -5,23 +5,17 @@ from signedind import SignedInd as SI
 import math
 
 def average_angle(a1,a2):
-  while a1 < 0:
-    a1 += 2*math.pi
-  while a1 > 2*math.pi:
-    a1 -= 2*math.pi
-  while a2 < 0:
+  """compute the average angle (halfway from a1 to a2)"""
+  while a2 < a1:
     a2 += 2*math.pi
-  while a2 > 2*math.pi:
+  while a2 > a1 + 2*math.pi:
     a2 -= 2*math.pi
-  a = min(a1,a2)
-  A = max(a1, a2)
-  if A-a < math.pi:
-    return 0.5*(a+A)
-  else:
-    ans = 0.5*(a+A+2*math.pi)
-    if ans > 2*math.pi:
-      ans -= 2*math.pi
-    return ans
+  ans = 0.5*(a1+a2)
+  while ans < 0:
+    ans += 2*math.pi
+  while ans > 2*math.pi:
+    ans -= 2*math.pi
+  return ans
 
 class PlanarVertex:
   def __init__(self, pt, i_edges, angles):
@@ -126,13 +120,15 @@ class EmbeddedSurface(tsurf.TopSurface):
       em_V.append( R3.Vector( (pv.pt.real, pv.pt.imag, -0.5)) )
       
       V_from_PG[i]['around'] = val*[None]
+      print "Doing around vertices for ", i, "of valence ", val
       for j in xrange(val):
         V_from_PG[i]['around'][j] = len(V)
         V.append( tsurf.Vertex( 6*[None], 6*[None] ) )
         ang = average_angle( pv.i_edge_angles[j], pv.i_edge_angles[(j+1)%val] )
+        print "doing angle", ang, " average of ", pv.i_edge_angles[j], pv.i_edge_angles[(j+1)%val]
         em_V.append( R3.Vector( (pv.pt.real + 0.5*math.cos(ang),                    \
-                              pv.pt.imag + 0.5*math.sin(ang),                    \
-                              0) ))
+                                 pv.pt.imag + 0.5*math.sin(ang),                    \
+                                 0) ))
     #create edges around the vertices
     for i,pv in enumerate(PG.v):
       val = len(pv.i_edges)
