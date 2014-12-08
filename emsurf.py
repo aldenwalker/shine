@@ -1,4 +1,5 @@
 import tsurf
+import R3
 from signedind import SignedInd as SI
 
 import math
@@ -81,22 +82,6 @@ class PlanarGraph:
     for i,e in enumerate(self.e):
       ans += str(i) + ": " + str(e) + "\n"
     return ans
-    
-
-
-
-class Vector:
-  def __init__(self, L):
-    if isinstance(L, int):
-      self.x = L*[0]
-    elif isinstance(L, list) or isinstance(L, tuple):
-      self.x = [i for i in L]
-  
-  def __repr__(self):
-    return "Vector(" + str(self.x) + ")"
-  
-  def __str__(self):
-    return str(self.x)
   
   
 
@@ -134,18 +119,18 @@ class EmbeddedSurface(tsurf.TopSurface):
       
       V_from_PG[i]['top'] = len(V)
       V.append( tsurf.Vertex( 2*val*[None], 2*val*[None] ) )
-      em_V.append( Vector( (pv.pt.real, pv.pt.imag, 0.5)) )
+      em_V.append( R3.Vector( (pv.pt.real, pv.pt.imag, 0.5)) )
       
       V_from_PG[i]['bottom'] = len(V)
       V.append( tsurf.Vertex( 2*val*[None], 2*val*[None] ) )
-      em_V.append( Vector( (pv.pt.real, pv.pt.imag, -0.5)) )
+      em_V.append( R3.Vector( (pv.pt.real, pv.pt.imag, -0.5)) )
       
       V_from_PG[i]['around'] = val*[None]
       for j in xrange(val):
         V_from_PG[i]['around'][j] = len(V)
         V.append( tsurf.Vertex( 6*[None], 6*[None] ) )
         ang = average_angle( pv.i_edge_angles[j], pv.i_edge_angles[(j+1)%val] )
-        em_V.append( Vector( (pv.pt.real + 0.5*math.cos(ang),                    \
+        em_V.append( R3.Vector( (pv.pt.real + 0.5*math.cos(ang),                    \
                               pv.pt.imag + 0.5*math.sin(ang),                    \
                               0) ))
     #create edges around the vertices

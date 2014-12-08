@@ -4,6 +4,7 @@ import gsurf
 import liftedsurf
 import emsurf
 import mobius
+import R3
 
 import math
 import copy
@@ -42,7 +43,11 @@ def rand_bright_color():
   return '#%02x%02x%02x' % c
   
 
-class SurfaceVisualizer:
+#############################################################################
+#  Hyperbolic surface visualizer
+#############################################################################
+
+class HypSurfaceVisualizer:
   def __init__(self, master, LS):
     self.master = master
     self.master.geometry('500x500+100+100')
@@ -256,9 +261,88 @@ class SurfaceVisualizer:
 
 
 
-def visualize_surface(LS):
+
+
+############################################################################
+# Embedded surface visualizer
+#############################################################################
+
+class EmSurfaceVisualizer:
+  def __init__(self, master, ES):
+    self.ES = ES
+    
+    self.master = master
+    self.master.geometry('500x500+100+100')
+    
+    self.canvas = tk.Canvas(self.master, borderwidth=0)
+    self.canvas.bind('<Configure>', self.canvas_resize)
+    
+    self.button_quit = tk.Button(self.master, text = 'Quit', command=self.quit)
+    self.button_rotate_left = tk.Button(self.master, text="RotL", command=lambda : self.rotate('left'))
+    self.button_rotate_right = tk.Button(self.master, text='RotR', command=lambda : self.rotate('right'))
+    
+    self.master.rowconfigure(3, weight=1)
+    self.master.columnconfigure(0, weight=1)
+    
+    self.canvas.grid(column=0, row=0, rowspan=4, sticky=tk.W+tk.E+tk.N+tk.S)
+    self.button_quit.grid(column=1, row=0, sticky=tk.N)
+    self.button_rotate_left.grid(column=1, row=1)
+    self.button_rotate_right.grid(column=2, row=1)
+    
+    self.draw_viewer = R3.ProjectionViewer( R3.Vector([2,2,2]),              \
+                                            R3.Vector([-1,-1,-1]),              \
+                                            [R3.Vector([6, 7, 8])] )
+    
+    self.draw_center = None
+    self.draw_scale = 100.0
+    self.draw_plane_hr = None
+    self.draw_plane_wr = None
+    self.draw_width = None
+    self.draw_height = None
+    self.drawing_items = []
+    
+  def draw_plane_to_canvas(self, pt):
+    scaled = (self.draw_scale*pt[0], self.draw_scale*pt[1])
+    return (self.draw_center[0] + scaled[0], self.draw_center[1] - scaled[1])
+    
+  def quit(self):
+    self.master.destroy()
+  
+  def canvas_resize(self, event):
+    self.canvas.config(background='#FFFFFF')
+    self.canvas.config(height=event.height, width=event.width)
+    self.draw_width = event.width
+    self.draw_height = event.height
+    self.draw_plane_wr = event.width/(2.0*self.draw_scale)
+    self.draw_plane_hr = event.height/(2.0*self.draw_scale)
+    self.draw_center = (self.draw_width/2, self.draw_height/2)
+    self.redraw()
+  
+  def redraw(self):
+    for di in self.drawing_items:
+      self.canvas.delete(di)
+    self.drawing_items = []
+    for ti,t in enumerate(self.ES.em_t):
+      pts, am = self.draw_viewer.project_triangle(t)
+      canvas_coords = [self.draw_plane_to_canvas(x) for x in pts]
+      flat_coord_list = [x for p in canvas_coords for x in p]
+      grayscale = int(128*(am+1))
+      rgb = '#%02x%02x%02x' % (grayscale, grayscale, grayscale)
+      print "Drawing triangle: ", canvas_coords
+      print "Amount: ", rgb
+      di = self.canvas.create_polygon(*flat_coord_list, fill=rgb, outline='black')
+
+
+def visualize_em_surface(ES):
   root = tk.Tk()
-  vs = SurfaceVisualizer(root, LS)
+  vs = EmSurfaceVisualizer(root, ES)
+  root.mainloop()
+
+
+
+def visualize_hyp_surface(LS):
+  root = tk.Tk()
+  vs = HypSurfaceVisualizer(root, LS)
   root.mainloop()
 
 
