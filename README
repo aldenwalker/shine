@@ -1,0 +1,11 @@
+shine
+
+Copyright 2014 Alden Walker
+
+shine currently does the following:
+(1) finds and visualizes hyperbolic structures on surfaces
+(2) visualizes embedded surfaces in R^3
+
+shine is currently in development.  The goal is that shine should be 
+able to nicely display hyperbolic geodesics on surfaces embedded in R^3.
+
