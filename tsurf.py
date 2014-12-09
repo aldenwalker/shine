@@ -61,7 +61,7 @@ class Triangle :
   def __str__(self):
     return repr(self)
 
-class TopSurface :
+class TopSurface(object) :
   def __init__(self, v, e, t):
     self.v = v
     self.e = e
@@ -166,7 +166,69 @@ class TopSurface :
         if v.i_tris[i] == None:
           self.attach_triangle_at( vi, i )
     return
+  
+  def subdivide(self):
+    old_num_verts = len(self.v)
+    old_num_edges = len(self.e)
+    old_num_tris = len(self.t)
+    vertices_from_edges = [None for e in self.e]
+    edges_from_edges = [[] for e in self.e]
+    edges_from_tris = [[] for t in self.t]
+    tris_from_tris = [[] for t in self.t]
+    for ei in xrange(old_num_edges):
+      new_vert_ind = len(self.v)
+      new_edge_ind = len(self.e)
+      vertices_from_edges[ei] = new_vert_ind
+      self.v.append(Vertex([SI(ei,-1), None, None, SI(new_edge_ind,1), None, None], \
+                           [None, None, None, None, None, None]))
+      edges_from_edges[ei]= [ei, new_edge_ind]
+      target_i_edges = self.v[self.e[ei].dest].i_edges
+      target_i_edges[ target_i_edges.index( SI(ei,-1) ) ] = SI(new_edge_ind,-1)
+      self.e.append(Edge(new_vert_ind, self.e[ei].dest, None, None))
+      self.e[ei].dest = new_vert_ind
     
+    for ti in xrange(old_num_tris):
+      t = self.t[ti]
+      edges_from_tris[ti] = [len(self.e)+i for i in xrange(3)]
+      tris_from_tris[ti] = [len(self.t)+i for i in xrange(3)] + [ti]
+      #add the triangles around it
+      for i in xrange(3):
+        #add the edge
+        v0 = vertices_from_edges[t.i_edges[(i-1)%3].ind]
+        v0_ind = (4 if t.i_edges[(i-1)%3].sign>0 else 1)
+        v1 = vertices_from_edges[t.i_edges[i].ind]
+        v1_ind = (5 if t.i_edges[i].sign>0 else 2)
+        self.v[v0].i_edges[v0_ind] = SI(len(self.e),1)
+        self.v[v1].i_edges[v1_ind] = SI(len(self.e),-1)
+        #add the triangle
+        new_t = Triangle([t.i_verts[i], (v1, v1_ind), (v0, (v0_ind-1)%len(self.v[v0].i_edges))], \
+                         [ (t.i_edges[i] if t.i_edges[i].sign>0 else SI(edges_from_edges[t.i_edges[i].ind][1], -1) ),  \
+                           SI(edges_from_tris[ti][i],-1),                                                              \
+                           (t.i_edges[(i-1)%3] if t.i_edges[(i-1)%3].sign<0 else SI(edges_from_edges[t.i_edges[(i-1)%3].ind][1],1)) ])
+        self.e.append( Edge(v0, v1, None, None) )
+        self.t.append(new_t)
+      #add the middle triangle (modify the existing triangle)
+      new_t = Triangle(3*[None],3*[None])
+      for j in xrange(3):
+        new_t.i_verts[j] = (vertices_from_edges[t.i_edges[j].ind], (4 if t.i_edges[j].sign>0 else 1))
+        new_t.i_edges[j] = SI(edges_from_tris[ti][(j+1)%3],1)
+      self.t[ti] = new_t
+    
+    for ti,t in enumerate(self.t):
+      for i in xrange(3):
+        self.v[t.i_verts[i][0]].i_tris[t.i_verts[i][1]] = (ti,i)
+        self.v[t.i_verts[i][0]].i_edges[t.i_verts[i][1]] = t.i_edges[i]
+        ei = t.i_edges[i]
+        if ei.sign>0:
+          self.e[ei.ind].on_left = (ti,i)
+        else:
+          self.e[ei.ind].on_right = (ti,i)
+        
+    
+    return (vertices_from_edges, edges_from_edges, edges_from_tris, tris_from_tris)
+                       
+    
+      
   
   def __repr__(self):
     return str(self)

@@ -83,7 +83,7 @@ class ProjectionViewer:
   
   def project_triangle(self, T):
     points = [self.project_point_flat(p) for p in T]
-    tnorm = (T[2]-T[0]).cross( T[1]-T[0] )
+    tnorm = (T[1]-T[0]).cross( T[2]-T[0] )
     tnorm = tnorm.scaled_to_len(1.0)
     to_lights = [(ell-T[0]).scaled_to_len(1.0) for ell in self.lights]
     amount_from_lights = [tnorm.dot(x) for x in to_lights]

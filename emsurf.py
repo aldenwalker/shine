@@ -120,12 +120,10 @@ class EmbeddedSurface(tsurf.TopSurface):
       em_V.append( R3.Vector( (pv.pt.real, pv.pt.imag, -0.5)) )
       
       V_from_PG[i]['around'] = val*[None]
-      print "Doing around vertices for ", i, "of valence ", val
       for j in xrange(val):
         V_from_PG[i]['around'][j] = len(V)
         V.append( tsurf.Vertex( 6*[None], 6*[None] ) )
         ang = average_angle( pv.i_edge_angles[j], pv.i_edge_angles[(j+1)%val] )
-        print "doing angle", ang, " average of ", pv.i_edge_angles[j], pv.i_edge_angles[(j+1)%val]
         em_V.append( R3.Vector( (pv.pt.real + 0.5*math.cos(ang),                    \
                                  pv.pt.imag + 0.5*math.sin(ang),                    \
                                  0) ))
@@ -233,6 +231,27 @@ class EmbeddedSurface(tsurf.TopSurface):
       ES.em_t[i] = [ES.em_v[t.i_verts[j][0]] for j in xrange(3)]
     
     return ES
+  
+  def subdivide(self):
+    old_nv = len(self.v)
+    old_ne = len(self.e)
+    old_nt = len(self.t)
+    vertices_from_edges, edges_from_edges, edges_from_tris, tris_from_tris = super(EmbeddedSurface, self).subdivide()
+    self.em_v = [(self.em_v[i] if i<old_nv else None) for i in xrange(len(self.v))]
+    self.em_e = len(self.e)*[None]
+    self.em_t = len(self.t)*[None]
+    for i in xrange(old_ne):
+      v0i = self.e[edges_from_edges[i][0]].source
+      v1i = self.e[edges_from_edges[i][1]].dest
+      new_vi = self.e[edges_from_edges[i][0]].dest
+      self.em_v[new_vi] = (self.em_v[v0i] + self.em_v[v1i])/2.0
+    for ei,e in enumerate(self.e):
+      self.em_e[ei] = [ self.em_v[e.source], self.em_v[e.dest] ]
+    for ti,t in enumerate(self.t):
+      self.em_t[ti] = [ self.em_v[t.i_verts[i][0]] for i in xrange(3) ]
+    return
+      
+  
   
   def __str__(self):
     ans = "Embedded surface:\n";

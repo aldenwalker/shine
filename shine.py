@@ -289,9 +289,9 @@ class EmSurfaceVisualizer:
     self.button_rotate_left.grid(column=1, row=1)
     self.button_rotate_right.grid(column=2, row=1)
     
-    self.draw_viewer = R3.ProjectionViewer( R3.Vector([1,-1,3]),              \
-                                            R3.Vector([0,1,-1]),              \
-                                            [R3.Vector([0,0,3])] )
+    self.draw_viewer = R3.ProjectionViewer( R3.Vector([2,2,1]),              \
+                                            R3.Vector([-2,-2,-1]),              \
+                                            [R3.Vector([0,0,3]), R3.Vector([1,1,-3])] )
     self.draw_transformation = R3.Matrix([[1,0,0],[0,1,0],[0,0,1]])
     self.draw_center = None
     self.draw_scale = 100.0
@@ -329,9 +329,9 @@ class EmSurfaceVisualizer:
       flat_coord_list = [x for p in canvas_coords for x in p]
       grayscale = int(128*(am+1))
       rgb = '#%02x%02x%02x' % (grayscale, grayscale, grayscale)
-      print "Drawing triangle: ", canvas_coords
-      print "Amount: ", rgb
-      di = self.canvas.create_polygon(*flat_coord_list, fill='red', outline='black')
+      #print "Drawing triangle: ", canvas_coords
+      #print "Amount: ", rgb
+      di = self.canvas.create_polygon(*flat_coord_list, fill=rgb, outline='black')
       self.drawing_items.append(di)
   
   def rotate(self, dir):
