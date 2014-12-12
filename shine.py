@@ -277,17 +277,29 @@ class EmSurfaceVisualizer:
     self.canvas = tk.Canvas(self.master, borderwidth=0)
     self.canvas.bind('<Configure>', self.canvas_resize)
     
-    self.button_quit = tk.Button(self.master, text = 'Quit', command=self.quit)
-    self.button_rotate_left = tk.Button(self.master, text="RotL", command=lambda : self.rotate('left'))
-    self.button_rotate_right = tk.Button(self.master, text='RotR', command=lambda : self.rotate('right'))
+    #self.button_quit = tk.Button(self.master, text = 'Quit', command=self.quit)
+    self.button_rotate_left = tk.Button(self.master, text="Rot left", command=lambda : self.rotate('left'))
+    self.button_rotate_right = tk.Button(self.master, text='Rot right', command=lambda : self.rotate('right'))
+    self.button_rotate_forward = tk.Button(self.master, text='Rot forw', command=lambda : self.rotate('forward'))
+    self.button_rotate_back = tk.Button(self.master, text='Rot back', command=lambda : self.rotate('back'))
+    self.button_subdivide = tk.Button(self.master, text='Subdivide', command=self.subdivide)
+    self.button_flow = tk.Button(self.master, text='Flow', command=self.flow)
+    self.draw_do_mesh = tk.IntVar()
+    self.check_do_mesh = tk.Checkbutton(self.master, text='Draw mesh', variable=self.draw_do_mesh, command=self.redraw)
+    self.draw_do_mesh.set(1)
     
-    self.master.rowconfigure(3, weight=1)
+    self.master.rowconfigure(4, weight=1)
     self.master.columnconfigure(0, weight=1)
     
-    self.canvas.grid(column=0, row=0, rowspan=4, sticky=tk.W+tk.E+tk.N+tk.S)
-    self.button_quit.grid(column=1, row=0, sticky=tk.N)
-    self.button_rotate_left.grid(column=1, row=1)
-    self.button_rotate_right.grid(column=2, row=1)
+    self.canvas.grid(column=0, row=0, rowspan=5, sticky=tk.W+tk.E+tk.N+tk.S)
+    #self.button_quit.grid(column=1, row=0, sticky=tk.N)
+    self.button_rotate_left.grid(column=1, row=0)
+    self.button_rotate_right.grid(column=2, row=0)
+    self.button_rotate_forward.grid(column=1, row=1)
+    self.button_rotate_back.grid(column=2, row=1)
+    self.button_subdivide.grid(column=1, row=2)
+    self.button_flow.grid(column=2, row=2)
+    self.check_do_mesh.grid(column=1, row=3)
     
     self.draw_viewer = R3.ProjectionViewer( R3.Vector([2,2,1]),              \
                                             R3.Vector([-2,-2,-1]),              \
@@ -324,6 +336,7 @@ class EmSurfaceVisualizer:
     self.drawing_items = []
     acted_on_T = [[self.draw_transformation(x) for x in t] for t in self.ES.em_t]
     pT = self.draw_viewer.project_triangles(acted_on_T)
+    outline = ('black' if self.draw_do_mesh.get()==1 else '')
     for pt,am in pT:
       canvas_coords = [self.draw_plane_to_canvas(x) for x in pt]
       flat_coord_list = [x for p in canvas_coords for x in p]
@@ -331,17 +344,28 @@ class EmSurfaceVisualizer:
       rgb = '#%02x%02x%02x' % (grayscale, grayscale, grayscale)
       #print "Drawing triangle: ", canvas_coords
       #print "Amount: ", rgb
-      di = self.canvas.create_polygon(*flat_coord_list, fill=rgb, outline='black')
+      di = self.canvas.create_polygon(*flat_coord_list, fill=rgb, outline=outline)
       self.drawing_items.append(di)
   
+  def subdivide(self):
+    self.ES.subdivide()
+    self.redraw()
+    
+  def flow(self):
+    self.ES.flow()
+    self.redraw()
+  
   def rotate(self, dir):
-    if dir == 'left':
-      ang = math.pi/6
+    if dir == 'left' or dir == 'left':
+      ang = (math.pi/6 if dir=='left' else -math.pi/6)
+      self.draw_transformation = R3.Matrix([[math.cos(ang), -math.sin(ang), 0], \
+                                            [math.sin(ang), math.cos(ang), 0],  \
+                                            [0,0,1]])*self.draw_transformation
     else:
-      ang = -math.pi/6
-    self.draw_transformation = self.draw_transformation*R3.Matrix([[math.cos(ang), -math.sin(ang), 0], \
-                                                                   [math.sin(ang), math.cos(ang), 0],  \
-                                                                   [0,0,1]])
+      ang = (-math.pi/6 if dir=='forward' else math.pi/6)
+      self.draw_transformation = R3.Matrix([[math.cos(ang), 0, -math.sin(ang)], \
+                                            [0,1,0],  \
+                                            [math.sin(ang), 0, math.cos(ang)]])*self.draw_transformation
     self.redraw()
 
 def visualize_em_surface(ES):

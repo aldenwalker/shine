@@ -251,7 +251,19 @@ class EmbeddedSurface(tsurf.TopSurface):
       self.em_t[ti] = [ self.em_v[t.i_verts[i][0]] for i in xrange(3) ]
     return
       
-  
+  def flow(self):
+    for i,v in enumerate(self.v):
+      av = R3.Vector([0,0,0])
+      for ei in v.i_edges:
+        ovi = (self.e[ei.ind].dest if ei.sign>0 else self.e[ei.ind].source)
+        av = av + self.em_v[ovi]
+      av = av*(1.0/len(v.i_edges))
+      self.em_v[i] = self.em_v[i]*0.8 + av*0.2
+    for i,e in enumerate(self.e):
+      self.em_e[i] = [self.em_v[e.source], self.em_v[e.dest]]
+    for i,t in enumerate(self.t):
+      self.em_t[i] = [self.em_v[t.i_verts[j][0]] for j in xrange(3)]
+    return
   
   def __str__(self):
     ans = "Embedded surface:\n";
