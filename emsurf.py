@@ -17,6 +17,11 @@ def average_angle(a1,a2):
     ans -= 2*math.pi
   return ans
 
+#############################################################################
+# a planar graph class
+# for technical reasons, it also can remember fundamental group
+# generators of a neighborhood
+#############################################################################
 class PlanarVertex:
   def __init__(self, pt, i_edges, angles):
     self.pt = pt
@@ -37,15 +42,17 @@ class PlanarEdge:
     return repr(self)
     
 class PlanarGraph:
-  def __init__(self, v, e):
+  def __init__(self, v, e, loops=None):
     self.v = v
     self.e = e
+    self.loops = (dict() if loops == None else loops)
   
   @classmethod
   def from_file(cls, graph_filename):
     f = open(graph_filename, 'r')
     lines = f.read().split('\n')
     f.close()
+    lines = [ell for ell in lines if len(ell)>0 and ell[0] != '#']
     num_v, num_e = map(int, lines[0].split())
     V = num_v*[None]
     E = num_e*[None]
@@ -55,6 +62,12 @@ class PlanarGraph:
       E[i] = PlanarEdge(*map(int, lines[i+num_v+1].split()))
       V[E[i].src].i_edges.append(SI(i,1))
       V[E[i].dest].i_edges.append(SI(i,-1))
+    
+    #record the loops, if there are any
+    loops = dict()
+    for i in xrange(1+num_v+num_e, len(lines)):
+      ell = lines[i].split()
+      loops[ell[0]] = ell[1:]
     
     #sort the edges around each vertex and record the angle
     for v in V:
@@ -66,7 +79,7 @@ class PlanarGraph:
       v.i_edges.sort(key=lambda x:x[1])
       v.i_edge_angles = [x[1] for x in v.i_edges]
       v.i_edges = [x[0] for x in v.i_edges]
-    return cls(V,E)
+    return cls(V,E,loops=loops)
   
   def __str__(self):
     ans = "Vertices: \n"
@@ -75,22 +88,38 @@ class PlanarGraph:
     ans += "Edges:\n"
     for i,e in enumerate(self.e):
       ans += str(i) + ": " + str(e) + "\n"
+    ans += "Loops:\n"
+    for ell in self.loops:
+      ans += str(ell) + ": " + str(self.loops[ell]) + "\n"
     return ans
   
   
 
 
+##########################################################################
+# a topological path in an embedded surface
+# the map is recorded by saying how far along each edge it is
+##########################################################################
+class EmbeddedPath(tsurf.TopologicalPath):
+  def __init__(self, ES, edges, edge_cords):
+    self.TS = copy.deepcopy(ES)
+    self.edges = edges
+    self.edges_cords = edge_coords
+  
+  @classmethod
+  def from_topological_path(cls, tp):
+    return cls(tp.TS, tp.edges, [0.5 for e in tp.edges])
 
 
-
-
-
-
+###########################################################################
+# a topological surface, embedded in R3
+###########################################################################
 class EmbeddedSurface(tsurf.TopSurface):
   def __init__(self, TS, em_v, em_e, em_t):
     self.v = TS.v
     self.e = TS.e
     self.t = TS.t
+    self.loops = TS.loops
     self.em_v = em_v
     self.em_e = em_e
     self.em_t = em_t
@@ -128,6 +157,7 @@ class EmbeddedSurface(tsurf.TopSurface):
                                  pv.pt.imag + 0.5*math.sin(ang),                    \
                                  0) ))
     #create edges around the vertices
+    E_from_PGV = [dict() for i in xrange(len(PG.v))]
     for i,pv in enumerate(PG.v):
       val = len(pv.i_edges)
       for j in xrange(val):
@@ -190,6 +220,7 @@ class EmbeddedSurface(tsurf.TopSurface):
       V[vs].i_edges[5] = SI(len(E),1)
       V[vd].i_edges.insert(vdi, SI(len(E),-1))
       V[vd].i_tris.append(None)
+      E_from_PG[i]['top_right'] = len(E)
       E.append( tsurf.Edge( vs, vd, None, None) )
       
       vs = V_from_PG[pe.src]['top']
@@ -199,6 +230,7 @@ class EmbeddedSurface(tsurf.TopSurface):
       V[vs].i_edges.insert(vsi, SI(len(E),1))
       V[vs].i_tris.append(None)
       V[vd].i_edges[5] = SI(len(E),-1)  
+      E_from_PG[i]['top_left'] = len(E)
       E.append( tsurf.Edge( vs, vd, None, None) ) 
       
       vs = V_from_PG[pe.src]['around'][src_index]
@@ -208,6 +240,7 @@ class EmbeddedSurface(tsurf.TopSurface):
       V[vs].i_edges[2] = SI(len(E),1)
       V[vd].i_edges.insert(vdi, SI(len(E),-1))  
       V[vd].i_tris.append(None)
+      E_from_PG[i]['bottom_left'] = len(E)
       E.append( tsurf.Edge( vs, vd, None, None) )    
       
       vs = V_from_PG[pe.src]['bottom']
@@ -217,7 +250,10 @@ class EmbeddedSurface(tsurf.TopSurface):
       V[vs].i_edges.insert(vsi, SI(len(E),1))
       V[vs].i_tris.append(None)
       V[vd].i_edges[2] = SI(len(E),-1)
+      E_from_PG[i]['bottom_right'] = len(E)
       E.append( tsurf.Edge( vs, vd, None, None) )
+    
+    #create the loops, if there are any
     
     ES = cls( tsurf.TopSurface(V,E,[]), em_V, len(E)*[None], len(T)*[None])
     #print ES

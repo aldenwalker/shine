@@ -9,7 +9,6 @@ import math
 def hash_complex(p):
   return ( int(1e4*p.real), int(1e4*p.imag) )
 
-
 class CoveringVertex(tsurf.Vertex):
   def __init__(self, pt, covered_v, iE, iT):
     self.i_edges = iE

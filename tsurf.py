@@ -1,5 +1,9 @@
+import copy
 from signedind import SignedInd as SI
 
+############################################################################
+# functions to help with triangulating the standard polygon 
+############################################################################
 def polygon_vert_out_labels(w):
   Lw = len(w)
   letter_inds = dict([(W,i) for (i,W) in enumerate(w)])
@@ -31,7 +35,62 @@ def polygon_edge_inds(w):
 
 
 
+############################################################################
+# a topological path through a surface, given by recording the edges 
+# which the path passes through.  An edge is positively oriented if 
+# {edge direction, path direction} is a positive basis
+############################################################################
+class TopologicalPath :
+  def __init__(self, TS, edges):
+    self.TS = copy.deepcopy(TS)
+    self.edges = edges
+  def __repr__(self):
+    return str(self)
+  def __str__(self):
+    return "TopologicalPath(" + str(edges) + ")"
+  ##########################################################################
+  # modify the path so that it gives a path in the subdivided surface (new_TS)
+  # it returns a list of the edges which come from the original edges
+  # this does not produce a particularly smooth path, since it's not intelligent 
+  # about which new edges it goes through
+  ##########################################################################
+  def subdivide(self, new_TS, vertices_from_edges, edges_from_edges, edges_from_tris, tris_from_tris):
+    initial_new_edges = [SI(edges_from_edges[ei.ind][0], ei.sign) for ei in self.edges]
+    #go through the old triangles and make up what can happen
+    #for when we go between any two sides via the 0th end of each edge
+    edge_pair_inserts = dict()
+    for ti, t in enumerate(self.TS.t):
+      for i in xrange(3):
+        eii = t.i_edges[i]
+        eiim1 = t.i_edges[(i-1)%3]
+        new_eii = SI(edges_from_edges[eii.ind][0], eii.sign)
+        new_eiim1 = SI(edges_from_edges[eiim1.ind][0], eiim1.sign)
+        if eii.sign>0 and eiim1.sign>0:
+          edge_pair_inserts[(new_eii, -new_eiim1)] = [SI(edges_from_tris[ti][i],1), SI(edges_from_tris[ti][(i-1)%3],-1)]
+          edge_pair_inserts[(new_eiim1, -new_eii)] = [SI(edges_from_tris[ti][(i-1)%3],1), SI(edges_from_tris[ti][i],-1)]
+        elif eii.sign>0 and eiim1.sign<0:
+          edge_pair_inserts[(new_eii, new_eiim1)] = []
+          edge_pair_inserts[(-new_eiim1, -new_eii)] = []
+        elif eii.sign<0 and eiim1.sign>0:
+          edge_pair_inserts[(-new_eii, -new_eiim1)] = [SI(edges_from_tris[ti][(i+1)%3],1), SI(edges_from_tris[ti][(i+2)%3], -1)]
+          edge_pair_inserts[(new_eiim1, new_eii)] = [SI(edges_from_tris[ti][(i+2)%3], 1), SI(edges_from_tris[ti][(i+1)%3],-1)]
+        else: #eii.sign<0 and eiim1.sign<0
+          edge_pair_inserts[(-new_eii, new_eiim1)] = [SI(edges_from_tris[ti][(i+1)%3], 1), SI(edges_from_tris[ti][i], -1)]
+          edge_pair_inserts[(-new_eiim1, new_eii)] = [SI(edges_from_tris[ti][i], 1), SI(edges_from_tris[ti][(i+1)%3],-1)]
+    new_edges = []
+    Line = len(initial_new_edges)
+    for i in xrange(Line):
+      ei = initial_new_edges[i]
+      eip1 = initial_new_edges[(i+1)%Line]
+      new_edges.append(ei)
+      new_edges.extend(edge_pair_inserts[(ei, eip1)])
+    self.edges = new_edges
+    self.TS = copy.deepcopy(new_TS)
+      
 
+#############################################################################
+# topological vertices, edges, and triangles 
+#############################################################################
 class Vertex :
   def __init__(self, iE, iF):
     self.i_edges = iE
@@ -61,12 +120,20 @@ class Triangle :
   def __str__(self):
     return repr(self)
 
+
+##########################################################################
+# a topological triangulated surface
+##########################################################################
 class TopSurface(object) :
-  def __init__(self, v, e, t):
+  def __init__(self, v, e, t, loops=None):
     self.v = v
     self.e = e
     self.t = t
+    self.loops = (dict() if loops == None else loops)
 
+  ########################################################################
+  # create a surface from a polygon gluing word
+  ########################################################################
   @classmethod
   def from_polygon(cls, w):
     Lw = len(w)
@@ -129,6 +196,9 @@ class TopSurface(object) :
           T[OR[0]].i_verts[OR[1]] = (i,j)   
     return cls(V,E,T)    
   
+  ##########################################################################
+  # use the cyclic orders on the incident edges to fill in a triangle that should be there
+  ##########################################################################
   def attach_triangle_at(self, VI, I ):
     """place a new triangle with 0th vertex at vi in position i"""
     i_verts = [(VI, I), None, None]
@@ -155,6 +225,9 @@ class TopSurface(object) :
     self.t.append( Triangle(i_verts, i_edges) )
     return
   
+  #########################################################################
+  # fill in missing triangles
+  #########################################################################
   def fill_in_triangles(self):
     """fill in any triangles that aren't there, as detected by looking for """
     v_to_fill = [i for i,v in enumerate(self.v) if None in v.i_tris]
@@ -167,6 +240,11 @@ class TopSurface(object) :
           self.attach_triangle_at( vi, i )
     return
   
+  ##########################################################################
+  # subdivide a surface by subdividing each edge into two edges and 
+  # thus each triangle into 4 triangles  It returns lists recording the 
+  # pieces which make up the new surface
+  ##########################################################################
   def subdivide(self):
     old_num_verts = len(self.v)
     old_num_edges = len(self.e)
@@ -228,8 +306,9 @@ class TopSurface(object) :
     return (vertices_from_edges, edges_from_edges, edges_from_tris, tris_from_tris)
                        
     
-      
-  
+  ##########################################################################
+  # print out a surface
+  ##########################################################################
   def __repr__(self):
     return str(self)
   
@@ -246,14 +325,23 @@ class TopSurface(object) :
       ans += str(i) + ": " + str(T) + "\n"
     return ans
 
+  #########################################################################
+  # compute the Euler characteristic
+  #########################################################################
   def euler_char(self):
     return len(self.v) - len(self.e) + len(self.t)
   
+  #########################################################################
+  # find the vertex with highest valence 
+  #########################################################################
   def highest_valence_vertex(self):
     L = [(i,len(v.i_edges)) for i,v in enumerate(self.v)]
     L.sort(key=lambda x:x[1])
     return L[-1][0]
 
+  #########################################################################
+  # find a vertex whose incident edges only touch it once
+  #########################################################################
   def is_isolated_vertex(self, vi):
     """an isolated vertex has the property that none of its incident 
     edges touch it twice"""
