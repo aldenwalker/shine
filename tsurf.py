@@ -59,25 +59,33 @@ class TopologicalPath :
     #for when we go between any two sides via the 0th end of each edge
     edge_pair_inserts = dict()
     for ti, t in enumerate(old_TS.t):
+      print "Doing triangle ", ti, t
       for i in xrange(3):
         eii = t.i_edges[i]
         eiim1 = t.i_edges[(i-1)%3]
         new_eii = SI(edges_from_edges[eii.ind][0], eii.sign)
         new_eiim1 = SI(edges_from_edges[eiim1.ind][0], eiim1.sign)
+        print "Doing edges ", eii, eiim1
         if eii.sign>0 and eiim1.sign>0:
           edge_pair_inserts[(new_eii, -new_eiim1)] = [SI(edges_from_tris[ti][i],1), SI(edges_from_tris[ti][(i-1)%3],-1)]
           edge_pair_inserts[(new_eiim1, -new_eii)] = [SI(edges_from_tris[ti][(i-1)%3],1), SI(edges_from_tris[ti][i],-1)]
+          print "Added ", (new_eii, -new_eiim1), (new_eiim1, -new_eii)
         elif eii.sign>0 and eiim1.sign<0:
           edge_pair_inserts[(new_eii, new_eiim1)] = []
           edge_pair_inserts[(-new_eiim1, -new_eii)] = []
+          print "Added ", (new_eii, new_eiim1), (-new_eiim1, -new_eii)
         elif eii.sign<0 and eiim1.sign>0:
           edge_pair_inserts[(-new_eii, -new_eiim1)] = [SI(edges_from_tris[ti][(i+1)%3],1), SI(edges_from_tris[ti][(i+2)%3], -1)]
           edge_pair_inserts[(new_eiim1, new_eii)] = [SI(edges_from_tris[ti][(i+2)%3], 1), SI(edges_from_tris[ti][(i+1)%3],-1)]
+          print "Added ", (-new_eii, -new_eiim1), (new_eiim1, new_eii)
         else: #eii.sign<0 and eiim1.sign<0
           edge_pair_inserts[(-new_eii, new_eiim1)] = [SI(edges_from_tris[ti][(i+1)%3], 1), SI(edges_from_tris[ti][i], -1)]
           edge_pair_inserts[(-new_eiim1, new_eii)] = [SI(edges_from_tris[ti][i], 1), SI(edges_from_tris[ti][(i+1)%3],-1)]
+          print "Added ", (-new_eii, new_eiim1), (-new_eiim1, new_eii)
     new_edges = []
     Line = len(initial_new_edges)
+    print "Initial new edges: ", initial_new_edges
+    print "Edge pair inserts: ", edge_pair_inserts
     for i in xrange(Line):
       ei = initial_new_edges[i]
       eip1 = initial_new_edges[(i+1)%Line]
