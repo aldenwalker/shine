@@ -348,7 +348,7 @@ class EmSurfaceVisualizer:
     for ell in self.ES.em_loops:
       this_loop = self.ES.em_loops[ell]
       for i,ei in enumerate(this_loop.edges):
-        print ei
+        #print ei
         v11 = self.ES.e[ei.ind].source
         v12 = self.ES.e[ei.ind].dest
         v1 = self.ES.em_v[v11]*this_loop.edge_coords[i] + self.ES.em_v[v12]*(1-this_loop.edge_coords[i])
@@ -357,14 +357,14 @@ class EmSurfaceVisualizer:
         v1_pc = self.draw_plane_to_canvas(v1_p)
         ip1 = (i+1)%len(this_loop.edges)
         eip1 = this_loop.edges[ip1]
-        print eip1, eip1.ind, type(eip1.ind)
+        #print eip1, eip1.ind, type(eip1.ind)
         v21 = self.ES.e[eip1.ind].source
         v22 = self.ES.e[eip1.ind].dest
         v2 = self.ES.em_v[v21]*this_loop.edge_coords[ip1] + self.ES.em_v[v22]*(1-this_loop.edge_coords[ip1])
         v2_a = self.draw_transformation(v2)
         v2_p = self.draw_viewer.project_point_flat(v2_a)
         v2_pc = self.draw_plane_to_canvas(v2_p)
-        print "Drawing line ", v1, " to ", v2, "transformed: ", v1_pc, " to ", v2_pc
+        #print "Drawing line ", v1, " to ", v2, "transformed: ", v1_pc, " to ", v2_pc
         di = [self.canvas.create_line(v1_pc[0], v1_pc[1], v2_pc[0], v2_pc[1], width=3), \
               self.canvas.create_oval(v1_pc[0]-2, v1_pc[1]-2, v1_pc[0]+2, v1_pc[1]+2, fill='#FF0000'), \
               self.canvas.create_oval(v2_pc[0]-2, v2_pc[1]-2, v2_pc[0]+2, v2_pc[1]+2, fill='#FF0000')]
@@ -391,6 +391,32 @@ class EmSurfaceVisualizer:
                                             [0,1,0],  \
                                             [math.sin(ang), 0, math.cos(ang)]])*self.draw_transformation
     self.redraw()
+
+
+
+
+
+#############################################################################
+# Combination visualizer
+#############################################################################
+class Shine:
+  
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 def visualize_em_surface(ES):
   root = tk.Tk()

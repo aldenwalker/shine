@@ -22,4 +22,6 @@ class SignedInd:
     return SignedInd(self.ind, -self.sign)
   def __eq__(self, other):
     return isinstance(other, SignedInd) and other != None and self.ind == other.ind and self.sign == other.sign
+  def __ne__(self, other):
+    return not (self == other)
   

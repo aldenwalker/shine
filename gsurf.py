@@ -5,6 +5,7 @@ import scipy.optimize
 import hyp
 import mobius
 import tsurf
+from signedind import SignedInd as SI
 
 ##############################################################################
 # Geometric (hyperbolic) surface

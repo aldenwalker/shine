@@ -115,6 +115,10 @@ class EmbeddedPath(tsurf.TopologicalPath):
   
   def __str__(self):
     return "EmbeddedPath(" + str(zip(self.edges, self.edge_coords)) + ")"
+  
+  def subdivide(self, old_TS, vertices_from_edges, edges_from_edges, edges_from_tris, tris_from_tris):
+    pass
+    
 
 ###########################################################################
 # a topological surface, embedded in R3
@@ -355,7 +359,7 @@ class EmbeddedSurface(tsurf.TopSurface):
       self.em_t[ti] = [ self.em_v[t.i_verts[i][0]] for i in xrange(3) ]
     for ell in self.loops:
       self.loops[ell].subdivide(old_TS, vertices_from_edges, edges_from_edges, edges_from_tris, tris_from_tris)
-      self.em_loops[ell].subdivide(old_TS, vertices_from_edges, edges_from_edges, edges_from_tris, tris_from_tris)
+      self.em_loops[ell] = EmbeddedPath.from_topological_path(self.loops[ell]) #(old_TS, vertices_from_edges, edges_from_edges, edges_from_tris, tris_from_tris)
     return
       
   def flow(self):
