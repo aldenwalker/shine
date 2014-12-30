@@ -189,7 +189,7 @@ class CoveringTri(tsurf.Triangle):
 ############################################################################
 # A cover of a geometric surface
 ############################################################################
-class LiftedSurface(gsurf.GeoSurface):
+class LiftedSurface(GeoSurface):
   def __init__(self, GS, ev, ee, et, v_lifts, e_lifts, t_lifts):
     self.v, self.e, self.t = GS.v, GS.e, GS.t
     self.h_tris, self.h_lengths = GS.h_tris, GS.h_lengths

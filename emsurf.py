@@ -1,5 +1,6 @@
 import tsurf
 import R3
+import copy
 from signedind import SignedInd as SI
 
 import math
@@ -101,21 +102,25 @@ class PlanarGraph:
 # the map is recorded by saying how far along each edge it is
 ##########################################################################
 class EmbeddedPath(tsurf.TopologicalPath):
-  def __init__(self, ES, edges, edge_cords):
-    self.TS = copy.deepcopy(ES)
+  def __init__(self, edges, edge_coords):
     self.edges = edges
-    self.edges_cords = edge_coords
+    self.edge_coords = edge_coords
   
   @classmethod
   def from_topological_path(cls, tp):
-    return cls(tp.TS, tp.edges, [0.5 for e in tp.edges])
+    return cls(tp.edges, [0.5 for e in tp.edges])
 
+  def __repr__(self):
+    return str(self)
+  
+  def __str__(self):
+    return "EmbeddedPath(" + str(zip(self.edges, self.edge_coords)) + ")"
 
 ###########################################################################
 # a topological surface, embedded in R3
 ###########################################################################
 class EmbeddedSurface(tsurf.TopSurface):
-  def __init__(self, TS, em_v, em_e, em_t):
+  def __init__(self, TS, em_v, em_e, em_t, em_loops):
     self.v = TS.v
     self.e = TS.e
     self.t = TS.t
@@ -123,11 +128,15 @@ class EmbeddedSurface(tsurf.TopSurface):
     self.em_v = em_v
     self.em_e = em_e
     self.em_t = em_t
+    self.em_loops = em_loops
   
   @classmethod
   def from_planar_graph_file(cls, graph_filename):
     return cls.from_planar_graph(PlanarGraph.from_file(graph_filename))
   
+  #########################################################################
+  # create an embedded surface which is a neighborhood of a graph
+  #########################################################################
   @classmethod
   def from_planar_graph(cls, PG):
     V = []
@@ -160,9 +169,11 @@ class EmbeddedSurface(tsurf.TopSurface):
     E_from_PGV = [dict() for i in xrange(len(PG.v))]
     for i,pv in enumerate(PG.v):
       val = len(pv.i_edges)
+      E_from_PGV[i]['around'] = val*[None]
       for j in xrange(val):
         V[ V_from_PG[i]['top'] ].i_edges[2*j+1] = SI(len(E),1)
         V[ V_from_PG[i]['around'][j] ].i_edges[0] = SI(len(E),-1)
+        E_from_PGV[i]['around'][j] = SI(len(E),1)
         E.append( tsurf.Edge( V_from_PG[i]['top'], V_from_PG[i]['around'][j], None, None ) )
         
         V[ V_from_PG[i]['bottom'] ].i_edges[-2*(j+1)] = SI(len(E),1)
@@ -201,10 +212,6 @@ class EmbeddedSurface(tsurf.TopSurface):
       V[ vs ].i_edges[4] = SI(len(E),1)
       V[ vd ].i_edges[1] = SI(len(E),-1)
       E.append( tsurf.Edge( vs, vd, None, None ) )
-    
-    #print "Before diagonals"
-    #print V
-    #print E
     
     #create the diagonal edges
     for i,pe in enumerate(PG.e):
@@ -254,10 +261,71 @@ class EmbeddedSurface(tsurf.TopSurface):
       E.append( tsurf.Edge( vs, vd, None, None) )
     
     #create the loops, if there are any
-    
-    ES = cls( tsurf.TopSurface(V,E,[]), em_V, len(E)*[None], len(T)*[None])
+    loops = dict()
+    for ell in PG.loops:
+      print "Making loop: ", ell, PG.loops[ell]
+      raw_loop_edges = [(SI.from_string(l) if l!='a' else 'a') for l in PG.loops[ell]]
+      Lrle = len(raw_loop_edges)
+      padded_loop_edges = []
+      #figure out which *graph* edges need to get added to get around the vertices
+      for i,ei in enumerate(raw_loop_edges):
+        if ei == 'a':
+          continue
+        next_ei = raw_loop_edges[(i+1)%Lrle]
+        if next_ei == 'a':
+          next_ei = raw_loop_edges[(i+2)%Lrle]
+          padded_loop_edges.extend([ei, 'a'])
+        else:
+          padded_loop_edges.append(ei)
+        if next_ei == ei or next_ei == -ei:
+          continue
+        central_vi = (PG.e[ei.ind].dest if ei.sign>0 else PG.e[ei.ind].src)
+        central_v = PG.v[central_vi]
+        central_v_ei1 = PG.v[central_vi].i_edges.index( -ei )
+        central_v_ei2 = PG.v[central_vi].i_edges.index( next_ei )
+        extra_edges = (central_v.i_edges[central_v_ei1+1:central_v_ei2] \
+                                          if central_v_ei1<central_v_ei2 else  \
+                       central_v.i_edges[central_v_ei1+1:] + central_v.i_edges[:central_v_ei2])
+        extra_edges = [SI(x.ind, s*x.sign) for x in extra_edges for s in [1,-1]]
+        padded_loop_edges.extend(extra_edges)
+      print "Padded loop edges: ", padded_loop_edges
+      #now actually figure out which real edges we cross
+      loop_edges = []
+      Lple = len(padded_loop_edges)
+      for i,ei in enumerate(padded_loop_edges):
+        next_ei = padded_loop_edges[(i+1)%Lple]
+        if next_ei == 'a':
+          #add the edges around
+          loop_edges.extend([ SI(E_from_PG[ei.ind][x], -1) for x in ['top_right', \
+                                                                         'right', \
+                                                                  'bottom_right', \
+                                                                        'bottom', \
+                                                                   'bottom_left', \
+                                                                          'left', \
+                                                                      'top_left', \
+                                                                        'top']])
+          next_ei = padded_loop_edges[(i+2)%Lple]
+        if ei == 'a' or next_ei == ei or next_ei == -ei:
+          continue
+        #add the edges to get from ei to next_ei
+        vi = (PG.e[ei.ind].dest if ei.sign>0 else PG.e[ei.ind].src)
+        vii = PG.v[vi].i_edges.index(-ei)
+        v_crossing_edge = E_from_PGV[vi]['around'][vii].ind #the sign is always positive
+        if ei.sign>0:
+          loop_edges.append( SI(E_from_PG[ei.ind]['top_right'],-1) )
+        else:
+          loop_edges.extend( [SI(E_from_PG[ei.ind][x],1) for x in ['top', 'top_left']] )
+        loop_edges.append( SI(v_crossing_edge, 1) )
+        if next_ei.sign>0:
+          pass #don't append anything
+        else:
+          loop_edges.append( SI(E_from_PG[next_ei.ind]['top'],-1) )
+      loops[ell] = loop_edges
+
+    ES = cls( tsurf.TopSurface(V,E,[],loops=loops), em_V, len(E)*[None], len(T)*[None], None)
     #print ES
     ES.fill_in_triangles()
+    ES.em_loops = dict([(ell, EmbeddedPath.from_topological_path(ES.loops[ell])) for ell in ES.loops])
     
     ES.em_e = len(ES.e)*[None]
     for i,e in enumerate(ES.e):
@@ -272,7 +340,7 @@ class EmbeddedSurface(tsurf.TopSurface):
     old_nv = len(self.v)
     old_ne = len(self.e)
     old_nt = len(self.t)
-    vertices_from_edges, edges_from_edges, edges_from_tris, tris_from_tris = super(EmbeddedSurface, self).subdivide()
+    old_TS, vertices_from_edges, edges_from_edges, edges_from_tris, tris_from_tris = super(EmbeddedSurface, self).subdivide()
     self.em_v = [(self.em_v[i] if i<old_nv else None) for i in xrange(len(self.v))]
     self.em_e = len(self.e)*[None]
     self.em_t = len(self.t)*[None]
@@ -285,6 +353,9 @@ class EmbeddedSurface(tsurf.TopSurface):
       self.em_e[ei] = [ self.em_v[e.source], self.em_v[e.dest] ]
     for ti,t in enumerate(self.t):
       self.em_t[ti] = [ self.em_v[t.i_verts[i][0]] for i in xrange(3) ]
+    for ell in self.loops:
+      self.loops[ell].subdivide(old_TS, vertices_from_edges, edges_from_edges, edges_from_tris, tris_from_tris)
+      self.em_loops[ell].subdivide(old_TS, vertices_from_edges, edges_from_edges, edges_from_tris, tris_from_tris)
     return
       
   def flow(self):

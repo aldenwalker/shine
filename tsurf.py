@@ -41,25 +41,24 @@ def polygon_edge_inds(w):
 # {edge direction, path direction} is a positive basis
 ############################################################################
 class TopologicalPath :
-  def __init__(self, TS, edges):
-    self.TS = copy.deepcopy(TS)
+  def __init__(self, edges):
     self.edges = edges
   def __repr__(self):
     return str(self)
   def __str__(self):
-    return "TopologicalPath(" + str(edges) + ")"
+    return "TopologicalPath(" + str(self.edges) + ")"
   ##########################################################################
   # modify the path so that it gives a path in the subdivided surface (new_TS)
   # it returns a list of the edges which come from the original edges
   # this does not produce a particularly smooth path, since it's not intelligent 
   # about which new edges it goes through
   ##########################################################################
-  def subdivide(self, new_TS, vertices_from_edges, edges_from_edges, edges_from_tris, tris_from_tris):
+  def subdivide(self, old_TS, vertices_from_edges, edges_from_edges, edges_from_tris, tris_from_tris):
     initial_new_edges = [SI(edges_from_edges[ei.ind][0], ei.sign) for ei in self.edges]
     #go through the old triangles and make up what can happen
     #for when we go between any two sides via the 0th end of each edge
     edge_pair_inserts = dict()
-    for ti, t in enumerate(self.TS.t):
+    for ti, t in enumerate(old_TS.t):
       for i in xrange(3):
         eii = t.i_edges[i]
         eiim1 = t.i_edges[(i-1)%3]
@@ -85,7 +84,6 @@ class TopologicalPath :
       new_edges.append(ei)
       new_edges.extend(edge_pair_inserts[(ei, eip1)])
     self.edges = new_edges
-    self.TS = copy.deepcopy(new_TS)
       
 
 #############################################################################
@@ -129,7 +127,7 @@ class TopSurface(object) :
     self.v = v
     self.e = e
     self.t = t
-    self.loops = (dict() if loops == None else loops)
+    self.loops = (dict() if loops == None else dict([(ell, TopologicalPath(loops[ell])) for ell in loops]))
 
   ########################################################################
   # create a surface from a polygon gluing word
@@ -246,6 +244,7 @@ class TopSurface(object) :
   # pieces which make up the new surface
   ##########################################################################
   def subdivide(self):
+    old_self = copy.deepcopy(self)
     old_num_verts = len(self.v)
     old_num_edges = len(self.e)
     old_num_tris = len(self.t)
@@ -303,7 +302,7 @@ class TopSurface(object) :
           self.e[ei.ind].on_right = (ti,i)
         
     
-    return (vertices_from_edges, edges_from_edges, edges_from_tris, tris_from_tris)
+    return (old_self, vertices_from_edges, edges_from_edges, edges_from_tris, tris_from_tris)
                        
     
   ##########################################################################

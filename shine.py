@@ -1,7 +1,6 @@
 import hyp
 import tsurf
 import gsurf
-import liftedsurf
 import emsurf
 import mobius
 import R3
@@ -301,8 +300,8 @@ class EmSurfaceVisualizer:
     self.button_flow.grid(column=2, row=2)
     self.check_do_mesh.grid(column=1, row=3)
     
-    self.draw_viewer = R3.ProjectionViewer( R3.Vector([2,2,1]),              \
-                                            R3.Vector([-2,-2,-1]),              \
+    self.draw_viewer = R3.ProjectionViewer( R3.Vector([2,-2,1]),              \
+                                            R3.Vector([-2,2,-1]),              \
                                             [R3.Vector([0,0,3]), R3.Vector([1,1,-3])] )
     self.draw_transformation = R3.Matrix([[1,0,0],[0,1,0],[0,0,1]])
     self.draw_center = None
@@ -346,6 +345,31 @@ class EmSurfaceVisualizer:
       #print "Amount: ", rgb
       di = self.canvas.create_polygon(*flat_coord_list, fill=rgb, outline=outline)
       self.drawing_items.append(di)
+    for ell in self.ES.em_loops:
+      this_loop = self.ES.em_loops[ell]
+      for i,ei in enumerate(this_loop.edges):
+        print ei
+        v11 = self.ES.e[ei.ind].source
+        v12 = self.ES.e[ei.ind].dest
+        v1 = self.ES.em_v[v11]*this_loop.edge_coords[i] + self.ES.em_v[v12]*(1-this_loop.edge_coords[i])
+        v1_a = self.draw_transformation(v1)
+        v1_p = self.draw_viewer.project_point_flat(v1_a)
+        v1_pc = self.draw_plane_to_canvas(v1_p)
+        ip1 = (i+1)%len(this_loop.edges)
+        eip1 = this_loop.edges[ip1]
+        print eip1, eip1.ind, type(eip1.ind)
+        v21 = self.ES.e[eip1.ind].source
+        v22 = self.ES.e[eip1.ind].dest
+        v2 = self.ES.em_v[v21]*this_loop.edge_coords[ip1] + self.ES.em_v[v22]*(1-this_loop.edge_coords[ip1])
+        v2_a = self.draw_transformation(v2)
+        v2_p = self.draw_viewer.project_point_flat(v2_a)
+        v2_pc = self.draw_plane_to_canvas(v2_p)
+        print "Drawing line ", v1, " to ", v2, "transformed: ", v1_pc, " to ", v2_pc
+        di = [self.canvas.create_line(v1_pc[0], v1_pc[1], v2_pc[0], v2_pc[1], width=3), \
+              self.canvas.create_oval(v1_pc[0]-2, v1_pc[1]-2, v1_pc[0]+2, v1_pc[1]+2, fill='#FF0000'), \
+              self.canvas.create_oval(v2_pc[0]-2, v2_pc[1]-2, v2_pc[0]+2, v2_pc[1]+2, fill='#FF0000')]
+        self.drawing_items.extend(di)
+        
   
   def subdivide(self):
     self.ES.subdivide()
@@ -356,7 +380,7 @@ class EmSurfaceVisualizer:
     self.redraw()
   
   def rotate(self, dir):
-    if dir == 'left' or dir == 'left':
+    if dir == 'left' or dir == 'right':
       ang = (math.pi/6 if dir=='left' else -math.pi/6)
       self.draw_transformation = R3.Matrix([[math.cos(ang), -math.sin(ang), 0], \
                                             [math.sin(ang), math.cos(ang), 0],  \
