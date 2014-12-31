@@ -400,12 +400,95 @@ class EmSurfaceVisualizer:
 # Combination visualizer
 #############################################################################
 class Shine:
+  def __init__(self, parent):
+    self.parent = parent
+    self.parent.geometry('500x500+100+100')
+    
+    self.emsurf_frame = tk.Frame(self.parent, bg='#FF0000')
+    self.emsurf_displayer = ShineEmSurfDisplay(self.emsurf_frame)
+    
+    self.loop_frame = tk.Frame(self.parent, bg='#0000FF')
+    self.loop_displayer = ShineLoopDisplay(self.loop_frame)
+    
+    self.parent.rowconfigure(0, weight=1)
+    self.parent.columnconfigure(0, weight=1)
+    
+    self.emsurf_frame.grid(column=0, row=0, sticky=tk.W+tk.E+tk.N+tk.S)
+    self.loop_frame.grid(column=1, row=0, sticky=tk.W+tk.E+tk.N+tk.S)
+    
+    #create the menu bar
+    self.menubar = tk.Menu(parent)
+    self.filemenu = tk.Menu(self.menubar, tearoff=0)
+    self.filemenu.add_command(label='Open')
+    self.filemenu.add_command(label='Save session')
+    self.filemenu.add_command(label='Export')
+    self.menubar.add_cascade(label='File', menu=self.filemenu)
+    
+    self.parent.config(menu=self.menubar)
+
+############################################################################
+# subvisualizer based on the embedded surface visualizer
+############################################################################
+class ShineEmSurfDisplay:
+  def __init__(self, parent):
+    self.parent = parent
+    
+    self.parent.rowconfigure(3, weight=1)
+    self.parent.columnconfigure(0, weight=1)
+    
+    self.canvas = tk.Canvas(self.parent, borderwidth=0)
+    self.canvas.bind('<Configure>', self.canvas_resize)
+    self.canvas.grid(column=0, row=0, rowspan=4, columnspan=4, sticky=tk.W+tk.E+tk.N+tk.S)
+    
+    self.rotate_vert_ccw_button = tk.Button(self.parent, text='>', command=lambda : self.rotate('vert_ccw'))
+    self.rotate_vert_cw_button = tk.Button(self.parent, text='<', command=lambda : self.rotate('vert_cw'))
+    self.rotate_horiz_ccw_button = tk.Button(self.parent, text='v', command=lambda : self.rotate('horiz_ccw'))
+    self.rotate_horiz_cw_button = tk.Button(self.parent, text='^', command=lambda : self.rotate('horiz_cw'))
+    self.zoom_in_button = tk.Button(self.parent, text='+', command=lambda : self.zoom('in'))
+    self.zoom_out_button = tk.Button(self.parent, text='-', command=lambda : self.zoom('out'))
+    self.rotate_vert_ccw_button.grid(row=1, column=3)
+    self.rotate_vert_cw_button.grid(row=1, column=1)
+    self.rotate_horiz_ccw_button.grid(row=2, column=2)
+    self.rotate_horiz_cw_button.grid(row=0, column=2)
+    self.zoom_in_button.grid(row=0, column=1)
+    self.zoom_out_button.grid(row=0, column=3)
+    
+    
+    
+  def canvas_resize(self, event):
+    self.canvas.config(background='#FFFFFF')
+    self.canvas.config(height=event.height, width=event.width)
+    self.canvas_width = event.width
+    self.canvas_height = event.height
+    self.draw_plane_wr = event.width/(2.0*self.draw_scale)
+    self.draw_plane_hr = event.height/(2.0*self.draw_scale)
+    self.draw_center = (self.draw_width/2, self.draw_height/2)
+    self.canvas_redraw()
+
+  def canvas_redraw(self):
+    pass
+
+  def rotate(self, dir):
+    pass
   
+  def zoom(self, dir):
+    pass
 
+###########################################################################
+# the list of loops
+###########################################################################
+class ShineLoopDisplay:
+  def __init__(self, parent):
+    self.parent = parent
+    
+    self.title = tk.Label(self.parent, text='Loops:')
+    self.add_loop_button = tk.Button(self.parent, text="+", command=self.add_loop)
 
-
-
-
+    self.title.grid(column=0, row=0)
+    self.add_loop_button.grid(column=0, row=1)
+  
+  def add_loop(self):
+    print "Hello"
 
 
 
@@ -430,6 +513,10 @@ def visualize_hyp_surface(LS):
   vs = HypSurfaceVisualizer(root, LS)
   root.mainloop()
 
+def run_shine():
+  root = tk.Tk()
+  s = Shine(root)
+  root.mainloop()
 
 
 def test():
@@ -438,7 +525,9 @@ def test():
   L = liftedsurf.LiftedSurface.lift_gsurf(G)
   visualize_surface(L)
   
-
+if __name__ == '__main__':
+  run_shine()
+  
 
 
 
