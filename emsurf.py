@@ -360,7 +360,7 @@ class EmbeddedSurface(tsurf.TopSurface):
     for ell in self.loops:
       self.loops[ell].subdivide(old_TS, vertices_from_edges, edges_from_edges, edges_from_tris, tris_from_tris)
       self.em_loops[ell] = EmbeddedPath.from_topological_path(self.loops[ell]) #(old_TS, vertices_from_edges, edges_from_edges, edges_from_tris, tris_from_tris)
-    return
+    return old_TS, vertices_from_edges, edges_from_edges, edges_from_tris, tris_from_tris
       
   def flow(self):
     for i,v in enumerate(self.v):

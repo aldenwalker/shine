@@ -45,7 +45,10 @@ class Vector:
     x1, x2, x3 = self.x
     o1, o2, o3 = other.x
     return Vector([ x2*o3-x3*o2, x3*o1-x1*o3, x1*o2-x2*o1 ])
-
+  
+  def copy(self):
+    return Vector([i for i in self.x])
+  
 
 class Matrix:
   def __init__(self, L):
@@ -60,12 +63,18 @@ class ProjectionViewer:
   def __init__(self, eye, towards, lights):
     self.lights = lights
     self.eye = eye
+    self.unscaled_towards = towards.copy()
     self.towards = towards.scaled_to_len(1.0)  # this is the plane normal
     self.plane_origin = self.eye + self.towards
     self.right = self.towards.cross( Vector([0,0,1]) )
     self.right = self.right.scaled_to_len(1.0)
     self.up = self.right.cross(self.towards)
     self.up = self.up.scaled_to_len(1.0)
+  
+  def zoom(self, factor):
+    self.eye = self.eye + self.unscaled_towards*factor
+    self.unscaled_towards = self.unscaled_towards*(1.0-factor)
+    self.plane_origin = self.eye + self.towards
   
   def project_point(self, pt):
     tp = pt - self.eye

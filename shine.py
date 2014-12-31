@@ -8,7 +8,10 @@ import R3
 import math
 import copy
 import random
+
 import Tkinter as tk
+import tkFileDialog
+import tkMessageBox
 
 def arc_disjoint_from_box(cc, cr, ca1, ca2, br, bh ) :
   """is the circular arc at center cc, radius cr, between angles ca1, ca2
@@ -401,11 +404,19 @@ class EmSurfaceVisualizer:
 #############################################################################
 class Shine:
   def __init__(self, parent):
+    
+    #set up the data variables
+    self.ES = None
+    self.GS = None
+    self.LS = None
+    self.loops = None    
+    
+    #set up the window
     self.parent = parent
     self.parent.geometry('500x500+100+100')
     
     self.emsurf_frame = tk.Frame(self.parent, bg='#FF0000')
-    self.emsurf_displayer = ShineEmSurfDisplay(self.emsurf_frame)
+    self.emsurf_displayer = ShineEmSurfDisplay(self.emsurf_frame, self)
     
     self.loop_frame = tk.Frame(self.parent, bg='#0000FF')
     self.loop_displayer = ShineLoopDisplay(self.loop_frame)
@@ -419,60 +430,167 @@ class Shine:
     #create the menu bar
     self.menubar = tk.Menu(parent)
     self.filemenu = tk.Menu(self.menubar, tearoff=0)
-    self.filemenu.add_command(label='Open')
+    self.filemenu.add_command(label='Open', command=self.open_file)
     self.filemenu.add_command(label='Save session')
     self.filemenu.add_command(label='Export')
+    self.filemenu.add_command(label='Quit', command=self.parent.destroy)
     self.menubar.add_cascade(label='File', menu=self.filemenu)
+    self.viewmenu = tk.Menu(self.menubar, tearoff=0)
+    self.viewmenu.add_checkbutton(label='Mesh', variable=self.emsurf_displayer.draw_do_mesh, command=self.emsurf_displayer.canvas_redraw)
+    self.menubar.add_cascade(label='View', menu=self.viewmenu)
+    self.actionmenu = tk.Menu(self.menubar, tearoff=0)
+    self.actionmenu.add_command(label='Subdivide', command=self.subdivide)
+    self.actionmenu.add_command(label='Flow', command=self.flow)
+    self.menubar.add_cascade(label='Actions', menu=self.actionmenu)
     
     self.parent.config(menu=self.menubar)
+  
+  def open_file(self):
+    filename = tkFileDialog.askopenfilename(parent=self.parent)
+    if len(filename) < 5:
+      return
+    if filename[-3:] == 'pgr':
+      self.ES = emsurf.EmbeddedSurface.from_planar_graph_file(filename)
+      self.GS = gsurf.GeoSurface.geometrize_tsurf(self.ES)
+      self.LS = gsurf.LiftedSurface.lift_gsurf(self.GS)
+      self.loops = []
+    else:
+      tkMessageBox.showerror(title='Error', message='File does not have a .pgr extension', parent=self.parent)
+      return
+    
+    self.reset()
+  
+  def reset(self):
+    self.emsurf_displayer.reset()
+    self.loop_displayer.reset()
+  
+  def subdivide(self):
+    if self.ES == None:
+      return
+    sub_data = self.ES.subdivide()
+    for ell in self.loops:
+      ell = ell.subdivide(*sub_data)
+    self.emsurf_displayer.canvas_redraw()
+  
+  def flow(self):
+    if self.ES == None:
+      return
+    self.ES.flow()
+    self.emsurf_displayer.canvas_redraw()
+    
 
 ############################################################################
 # subvisualizer based on the embedded surface visualizer
 ############################################################################
 class ShineEmSurfDisplay:
-  def __init__(self, parent):
-    self.parent = parent
+  def __init__(self, tk_parent, shine_parent):
+    self.tk_parent = tk_parent
+    self.shine_parent = shine_parent
     
-    self.parent.rowconfigure(3, weight=1)
-    self.parent.columnconfigure(0, weight=1)
+    # set up the window
+    self.tk_parent.rowconfigure(3, weight=1)
+    self.tk_parent.columnconfigure(0, weight=1)
     
-    self.canvas = tk.Canvas(self.parent, borderwidth=0)
+    self.canvas = tk.Canvas(self.tk_parent, borderwidth=0)
     self.canvas.bind('<Configure>', self.canvas_resize)
     self.canvas.grid(column=0, row=0, rowspan=4, columnspan=4, sticky=tk.W+tk.E+tk.N+tk.S)
     
-    self.rotate_vert_ccw_button = tk.Button(self.parent, text='>', command=lambda : self.rotate('vert_ccw'))
-    self.rotate_vert_cw_button = tk.Button(self.parent, text='<', command=lambda : self.rotate('vert_cw'))
-    self.rotate_horiz_ccw_button = tk.Button(self.parent, text='v', command=lambda : self.rotate('horiz_ccw'))
-    self.rotate_horiz_cw_button = tk.Button(self.parent, text='^', command=lambda : self.rotate('horiz_cw'))
-    self.zoom_in_button = tk.Button(self.parent, text='+', command=lambda : self.zoom('in'))
-    self.zoom_out_button = tk.Button(self.parent, text='-', command=lambda : self.zoom('out'))
+    self.rotate_vert_ccw_button = tk.Button(self.tk_parent, text='>', command=lambda : self.rotate('vert_ccw'))
+    self.rotate_vert_cw_button = tk.Button(self.tk_parent, text='<', command=lambda : self.rotate('vert_cw'))
+    self.rotate_horiz_ccw_button = tk.Button(self.tk_parent, text='v', command=lambda : self.rotate('horiz_ccw'))
+    self.rotate_horiz_cw_button = tk.Button(self.tk_parent, text='^', command=lambda : self.rotate('horiz_cw'))
+    self.zoom_in_button = tk.Button(self.tk_parent, text='+', command=lambda : self.zoom('in'))
+    self.zoom_out_button = tk.Button(self.tk_parent, text='-', command=lambda : self.zoom('out'))
+    self.draw_do_mesh_button = tk.Button(self.tk_parent, text='#', command=self.swap_mesh)
+    self.subdivide_button = tk.Button(self.tk_parent, text='S', command=self.shine_parent.subdivide)
+    self.flow_button = tk.Button(self.tk_parent, text='F', command=self.shine_parent.flow)
     self.rotate_vert_ccw_button.grid(row=1, column=3)
     self.rotate_vert_cw_button.grid(row=1, column=1)
     self.rotate_horiz_ccw_button.grid(row=2, column=2)
     self.rotate_horiz_cw_button.grid(row=0, column=2)
     self.zoom_in_button.grid(row=0, column=1)
     self.zoom_out_button.grid(row=0, column=3)
+    self.draw_do_mesh_button.grid(row=1, column=2)
+    self.subdivide_button.grid(row=2, column=1)
+    self.flow_button.grid(row=2, column=3)
     
+    #set up the drawing
+    self.draw_do_mesh = tk.IntVar()
+    self.draw_do_mesh.set(1)
+    self.drawing_items = []
+    self.reset()
     
+  def reset(self):
+    self.draw_viewer = R3.ProjectionViewer( R3.Vector([0,-2,1]),              \
+                                            R3.Vector([0,2,-1]),              \
+                                            [R3.Vector([0,0,3]), R3.Vector([1,1,-3])] )
+    self.draw_transformation = R3.Matrix([[1,0,0],[0,1,0],[0,0,1]])
+    self.canvas_width = int(self.canvas.config()['width'][-1])
+    self.canvas_height = int(self.canvas.config()['height'][-1])
+    self.draw_canvas_center = (self.canvas_width/2, self.canvas_height/2)
+    self.draw_plane_to_canvas_scale = 100.0
+    self.draw_do_mesh.set(1)
+    self.canvas_redraw()
     
   def canvas_resize(self, event):
     self.canvas.config(background='#FFFFFF')
     self.canvas.config(height=event.height, width=event.width)
     self.canvas_width = event.width
     self.canvas_height = event.height
-    self.draw_plane_wr = event.width/(2.0*self.draw_scale)
-    self.draw_plane_hr = event.height/(2.0*self.draw_scale)
-    self.draw_center = (self.draw_width/2, self.draw_height/2)
+    self.draw_canvas_center = (self.canvas_width/2, self.canvas_height/2)
     self.canvas_redraw()
-
+  
+  def swap_mesh(self):
+    self.draw_do_mesh.set(1-self.draw_do_mesh.get())
+    self.canvas_redraw()
+  
+  def draw_plane_to_canvas(self, pt):
+    scaled = (self.draw_plane_to_canvas_scale*pt[0], self.draw_plane_to_canvas_scale*pt[1])
+    return (self.draw_canvas_center[0] + scaled[0], self.draw_canvas_center[1] - scaled[1])
+  
   def canvas_redraw(self):
-    pass
+    #erase the canvas
+    for di in self.drawing_items:
+      self.canvas.delete(di)
+    self.drawing_items = []
+    
+    #if there's no surface, show nothing
+    if self.shine_parent.ES == None:
+      self.drawing_items.append( self.canvas.create_text(*self.draw_canvas_center, text='(No surface; open a new surface with file menu)') )
+      return
+    
+    #if there is a surface, show it
+    acted_on_T = [[self.draw_transformation(x) for x in t] for t in self.shine_parent.ES.em_t]
+    pT = self.draw_viewer.project_triangles(acted_on_T)
+    outline = ('black' if self.draw_do_mesh.get()==1 else '')
+    for pt,am in pT:
+      canvas_coords = [self.draw_plane_to_canvas(x) for x in pt]
+      flat_coord_list = [x for p in canvas_coords for x in p]
+      grayscale = int(128*(am+1))
+      rgb = '#%02x%02x%02x' % (grayscale, grayscale, grayscale)
+      #print "Drawing triangle: ", canvas_coords
+      #print "Amount: ", rgb
+      di = self.canvas.create_polygon(*flat_coord_list, fill=rgb, outline=outline)
+      self.drawing_items.append(di)
+    
 
   def rotate(self, dir):
-    pass
+    if dir == 'vert_ccw' or dir == 'vert_cw':
+      ang = (math.pi/12 if dir=='vert_ccw' else -math.pi/12)
+      self.draw_transformation = R3.Matrix([[math.cos(ang), -math.sin(ang), 0], \
+                                            [math.sin(ang), math.cos(ang), 0],  \
+                                            [0,0,1]])*self.draw_transformation
+    else:
+      ang = (math.pi/12 if dir=='horiz_ccw' else -math.pi/12)
+      self.draw_transformation = R3.Matrix([[1,0,0],\
+                                            [0, math.cos(ang), -math.sin(ang)], \
+                                            [0, math.sin(ang), math.cos(ang)]])*self.draw_transformation
+    self.canvas_redraw()
   
   def zoom(self, dir):
-    pass
+    #self.draw_viewer.zoom( (0.1 if dir=='in' else 1.1) )
+    self.draw_plane_to_canvas_scale = self.draw_plane_to_canvas_scale * (0.9 if dir=='out' else 1.1)
+    self.canvas_redraw()
 
 ###########################################################################
 # the list of loops
@@ -489,7 +607,9 @@ class ShineLoopDisplay:
   
   def add_loop(self):
     print "Hello"
-
+  
+  def reset(self):
+    pass
 
 
 
