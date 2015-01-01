@@ -1,4 +1,5 @@
 import math
+import hyp
 
 class MobiusTrans:
   def __init__(self, a,b,c,d):
@@ -52,6 +53,23 @@ class MobiusTrans:
     M1 = cls.unit_tangent_to_I_vert(p1, A1)
     M2 = cls.unit_tangent_to_I_vert(p2, A2)
     return M2.inverse().compose( M1 )
+  
+  def tr(self):
+    return self.a + self.d
+  
+  def geodesic_axis(self):
+    if abs(self.tr() <= 2):
+      return None
+    if hyp.same_float(0, self.c):
+      return hyp.HypGeodesic( self.b/(self.d-self.a), 'inf' )
+    ad = self.a-self.d
+    bc = self.b*self.c
+    p1 = ( ad-math.sqrt( ad**2 + 4*bc ) ) / 2*self.c
+    p2 = ( ad+math.sqrt( ad**2 + 4*bc ) ) / 2*self.c
+    if abs( 1.0 / (self.c*p1 + self.d)**2 ) > 1:
+      return hyp.HypGeodesic.from_real_endpoints( p1, p2 )
+    else:
+      return hyp.HypGeodesic.from_real_endpoints( p2, p1 )
   
   def __call__(self, z):
     if z == 'inf':

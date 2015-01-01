@@ -421,6 +421,10 @@ class Shine:
     self.loop_frame = tk.Frame(self.parent, bg='#0000FF')
     self.loop_displayer = ShineLoopDisplay(self.loop_frame, self)
     
+    self.do_show_lift = tk.IntVar()
+    self.do_show_lift.set(0)
+    self.liftedsurf_displayer = None
+    
     self.parent.rowconfigure(0, weight=1)
     self.parent.columnconfigure(0, weight=1)
     
@@ -437,6 +441,7 @@ class Shine:
     self.menubar.add_cascade(label='File', menu=self.filemenu)
     self.viewmenu = tk.Menu(self.menubar, tearoff=0)
     self.viewmenu.add_checkbutton(label='Mesh', variable=self.emsurf_displayer.draw_do_mesh, command=self.emsurf_displayer.canvas_redraw)
+    self.viewmenu.add_checkbutton(label='Lifted surface', variable=self.do_show_lift, command=self.swap_show_lift) 
     self.menubar.add_cascade(label='View', menu=self.viewmenu)
     self.actionmenu = tk.Menu(self.menubar, tearoff=0)
     self.actionmenu.add_command(label='Subdivide', command=self.subdivide)
@@ -454,16 +459,28 @@ class Shine:
       self.ES = emsurf.EmbeddedSurface.from_planar_graph_file(filename)
       self.GS = gsurf.GeoSurface.geometrize_tsurf(self.ES)
       self.LS = gsurf.LiftedSurface.lift_gsurf(self.GS)
-      self.loop_displayer.reset()
     else:
       tkMessageBox.showerror(title='Error', message='File does not have a .pgr extension', parent=self.parent)
       return
     
     self.reset()
   
+  def swap_show_lift(self):
+    if self.do_show_lift.get() == 1:
+      self.liftedsurf_displayer = ShineHypSurfaceDisplay(self)
+      self.liftedsurf_displayer.window.protocol("WM_DELETE_WINDOW", self.kill_lift)
+    else:
+      self.kill_lift()
+  
+  def kill_lift(self):
+    self.liftedsurf_displayer.window.destroy()
+    self.liftedsurf_displayer = None
+    self.do_show_lift.set(0)
+    
   def reset(self):
     self.emsurf_displayer.reset()
     self.loop_displayer.reset()
+    self.liftedsurf_displayer.reset()
   
   def subdivide(self):
     if self.ES == None:
@@ -557,7 +574,7 @@ class ShineEmSurfDisplay:
     
     #if there's no surface, show nothing
     if self.shine_parent.ES == None:
-      self.drawing_items.append( self.canvas.create_text(*self.draw_canvas_center, text='(No surface; open a new surface with file menu)') )
+      self.drawing_items.append( self.canvas.create_text(*self.draw_canvas_center, text='(No surface; open a new surface with the file menu)') )
       return
     
     #if there is a surface, show it
@@ -731,6 +748,261 @@ class ShineLoop:
     
     
     
+############################################################################
+# a hyperbolic lifted surface displayer
+############################################################################
+class ShineHypSurfaceDisplay:
+  def __init__(self, shine_parent):
+    self.shine_parent = shine_parent
+    self.tk_parent = shine_parent.parent
+    self.window = tk.Toplevel(self.tk_parent)
+    self.window.title('Hyperbolic structure')
+    self.window.geometry('500x500+%d+%d' % (self.tk_parent.winfo_rootx()+self.tk_parent.winfo_width(), self.tk_parent.winfo_rooty()) )
+    
+    self.canvas = tk.Canvas(self.window, borderwidth=0)
+    self.canvas.bind('<Configure>', self.canvas_resize)
+    self.canvas.bind('<Button-1>', self.canvas_click)
+    
+    self.button_rotate_left = tk.Button(self.window, text="<", command=lambda : self.rotate('left'))
+    self.button_rotate_right = tk.Button(self.window, text='>', command=lambda : self.rotate('right'))
+    self.draw_do_propagate = tk.IntVar()
+    self.check_propagate = tk.Checkbutton(self.window, text='Propagate', variable=self.draw_do_propagate, command=self.canvas_redraw)
+    self.draw_do_propagate.set(0)
+    
+    self.window.rowconfigure(2, weight=1)
+    self.window.columnconfigure(0, weight=1)
+    
+    self.canvas.grid(column=0, row=0, rowspan=3, columnspan=3, sticky=tk.W+tk.E+tk.N+tk.S)
+    self.button_rotate_left.grid(column=1, row=0)
+    self.button_rotate_right.grid(column=2, row=0)
+    self.check_propagate.grid(column=1, row=1)
+    
+    self.draw_transformation = mobius.MobiusTrans(1,0,0,1)
+    self.draw_scale = 50.0
+    self.drawing_items = []
+    self.draw_colors = [rand_bright_color() for _ in xrange(100)]
+  
+  ###########################################################################
+  # resize the canvas and figure out how big things are
+  ###########################################################################
+  def canvas_resize(self, event):
+    self.canvas.config(background='#FFFFFF')
+    self.canvas.config(height=event.height, width=event.width)
+    self.draw_canvas_width = event.width
+    self.draw_canvas_height = event.height
+    self.draw_canvas_center = (self.draw_canvas_width/2, self.draw_canvas_height/2)
+    self.draw_canvas_middle = self.draw_canvas_width/2
+    self.draw_complex_width = self.draw_canvas_width/self.draw_scale
+    self.draw_complex_height = self.draw_canvas_height/self.draw_scale
+    self.canvas_redraw()
+  
+  ###########################################################################
+  # reset
+  ###########################################################################
+  def reset(self):
+    #erase the canvas
+    for di in self.drawing_items:
+      self.canvas.delete(di)
+    self.drawing_items = []
+    self.draw_transformation = mobius.MobiusTrans(1,0,0,1)
+    self.canvas_redraw()
+  ###########################################################################
+  # draw the surface
+  ###########################################################################
+  def canvas_redraw(self):
+    #erase the canvas
+    for di in self.drawing_items:
+      self.canvas.delete(di)
+    self.drawing_items = []
+    
+    #if there's no surface, show nothing
+    if self.shine_parent.LS == None:
+      self.drawing_items.append( self.canvas.create_text(*self.draw_canvas_center, text='(No surface; open a new surface with the file menu)') )
+      return
+    
+    #if there is a surface, show it
+    for di in self.drawing_items:
+      self.canvas.delete(di)
+    self.drawing_items = []
+    
+    self.extended_LS = copy.deepcopy(self.shine_parent.LS)
+    
+    if self.draw_do_propagate.get()==1:
+      self.propagate_surface()
+    
+    #draw all the first lifts of the triangles
+    for ti in xrange(len(self.extended_LS.t)):
+      lti = self.extended_LS.t_lifts[ti][0]
+      self.draw_triangle(self.extended_LS.em_t[lti].t, '#FFA0A0')
+    
+    #draw *all* the edges, including the new ones
+    #if an edge only has one lift in the original LS, then
+    #it should be thin
+    for i,e in enumerate(self.extended_LS.em_e):
+      if len(self.shine_parent.LS.e_lifts[e.covered_e])==1:
+        self.draw_geodesic_segment(e.gi, thickness=1)
+      else:
+        self.draw_geodesic_segment(e.gi, thickness=2)
+    
+    #draw all the vertices, giving the same color to lifts
+    #of the same vertex
+    for i,v in enumerate(self.extended_LS.em_v):
+      col = self.draw_colors[v.covered_v%len(self.draw_colors)]
+      self.draw_point(v.pt, col, r=3)
+  ###########################################################################
+  # convert a complex point to a pixel and vice versa
+  ###########################################################################
+  def draw_complex_to_canvas(self, z):
+    z *= self.draw_scale
+    y = self.draw_canvas_height - z.imag
+    x = self.draw_canvas_middle + z.real
+    return (x,y)
+  
+  def draw_canvas_to_complex(self, x,y):
+    return (1.0/self.draw_scale)*complex(x-self.draw_canvas_middle, self.draw_canvas_height - y)
+  
+  ###########################################################################
+  # draw a point (really, an oval)
+  ###########################################################################
+  def draw_point(self, p, col, r=2):
+    t_p = self.draw_transformation(p)
+    pp = self.draw_complex_to_canvas(t_p)
+    di = self.canvas.create_oval(pp[0]-r,pp[1]-r,pp[0]+r,pp[1]+r,fill=col)
+    self.drawing_items.append(di)
+  
+  ###########################################################################
+  # check if a complex point lies in the canvas
+  ###########################################################################
+  def check_pt_in_window(self, p):
+    tp = self.draw_transformation(p)
+    br = self.draw_complex_width/2.0
+    bh = self.draw_complex_height
+    return -br < tp.real and tp.real < br and 0 < tp.imag and tp.imag < bh
+  
+  ##########################################################################
+  # check if a geodesic segment is disjoint from the drawing, or very small
+  ##########################################################################
+  def check_gi_in_window(self, gi, do_trans=True):
+    t_gi = gi.act_by_mobius(self.draw_trans)
+    if t_gi.Euclidean_length() < 1:
+      return True
+    return arc_disjoint_from_box(t_gi.circ_center, t_gi.circ_radius,        \
+                                 t_gi.circ_angle1, t_gi.circ_angle2,       \
+                                 self.draw_complex_width/2.0,               \
+                                 self.draw_complex_height)   
+  ##########################################################################
+  # draw a geodesic segment (arc of a circle)
+  ##########################################################################
+  def draw_geodesic_segment(self, gi, thickness=1):
+    trans_gi = gi.act_by_mobius(self.draw_transformation)
+    #print "Drawing geodesic segment: ", gi
+    #print "After trans: ", trans_gi
+    if trans_gi.vertical:
+      s = self.draw_complex_to_canvas(trans_gi.start)
+      e = self.draw_complex_to_canvas(trans_gi.end)
+      di = self.canvas.create_line(s[0], s[1], e[0], e[1], width=2)
+      self.drawing_items.append(di)
+      return
+    ma = min(trans_gi.circ_angle1, trans_gi.circ_angle2)
+    ma *= 180.0/math.pi
+    Ma = max(trans_gi.circ_angle1, trans_gi.circ_angle2)
+    Ma *= 180.0/math.pi
+    c = trans_gi.circ_center
+    r = trans_gi.circ_radius
+    #scale to the canvas
+    cc = self.draw_complex_to_canvas(c)
+    rr = self.draw_scale * r
+    bbox = (cc[0]-rr, cc[1]-rr, cc[0]+rr, cc[1]+rr)
+    bbox = [int(b) for b in bbox]
+    di = self.canvas.create_arc(bbox[0], bbox[1], bbox[2], bbox[3], style=tk.ARC, start=ma, extent=(Ma-ma), width=thickness)
+    #print "Drew arc at ", bbox, " with start, extent", ma, Ma-ma
+    self.drawing_items.append(di)
+  
+  #########################################################################
+  # draw a triangle (and fill it, using a polygon)
+  #########################################################################
+  def draw_triangle(self, t, col):
+      #make a polygon with several points per side
+      pts = []
+      for i in xrange(3):
+        gi = t.sides[i].act_by_mobius(self.draw_transformation)
+        if gi.vertical:
+          num_joints = 1
+        else:
+          total_angle = abs(gi.circ_angle2 - gi.circ_angle1)
+          num_joints = int((total_angle/(2*math.pi))*20 + 1)
+          EL = gi.Euclidean_length()
+          num_joints = int(num_joints*EL+1)
+        for j in xrange(num_joints):
+          pts.append( gi.pt_along( float(j)/float(num_joints) ) )
+      cpts = [self.draw_complex_to_canvas(p) for p in pts]
+      cpts = [x for P in cpts for x in P]
+      di = self.canvas.create_polygon(*cpts, fill=col)
+      self.drawing_items.append(di)
+  
+  ########################################################################
+  # propogate the surface (i.e. lift more triangles)
+  ########################################################################
+  def propagate_surface(self):
+    v_stack = [(i,v) for i,v in enumerate(self.extended_LS.em_v) if None in v.i_tris]
+    while len(v_stack)>0:
+      #print "Stack: ", v_stack
+      (i,v) = v_stack.pop()
+      if (not self.check_pt_in_window(v.pt))           or         \
+         (self.draw_transformation(v.pt).imag < 0.25)  or         \
+         (None not in v.i_tris):
+        continue
+      j = 0
+      IT = v.i_tris
+      LIT = len(IT)
+      while IT[j] == None:
+        j = (j+1)%LIT
+      while IT[j] != None:
+        j = (j+1)%LIT
+      while IT[j] == None:
+        ei = v.i_edges[j] #note this is the edge of the previous triangle
+        old_n_vs = len(self.extended_LS.em_v)
+        self.extended_LS.lift_triangle_to_lifted_edge(ei)
+        if len(self.extended_LS.em_v) > old_n_vs:
+          v_stack.append( (old_n_vs, self.extended_LS.em_v[old_n_vs]) )
+        j = (j+1)%LIT
+    return
+  
+  ####################### signals
+  
+  def canvas_click(self, event):
+    if self.shine_parent.LS == None:
+      return
+    p = (event.x, event.y)
+    #print "Clicked on ", p
+    can_p = (self.canvas.canvasx(p[0]), self.canvas.canvasy(p[1]))
+    #print "Canvas: ", can_p
+    com_p = self.draw_canvas_to_complex(*can_p)
+    can_center = (self.draw_canvas_width/2.0, self.draw_canvas_height/2.0)
+    com_center = self.draw_canvas_to_complex(*can_center)
+    #print can_center, com_center
+    #print "Moving point", com_p, "to", com_center
+    M = mobius.MobiusTrans.unit_tangent_action(com_p, 0, com_center, 0)
+    self.draw_transformation = M.compose(self.draw_transformation)
+    self.canvas_redraw()
+  
+  def rotate(self, dir):
+    if self.shine_parent.LS == None:
+      return
+    theta = (math.pi/40.0 if dir=='left' else -math.pi/40.0)
+    M = mobius.MobiusTrans.unit_tangent_action(1j, 0, 1j, theta)
+    self.draw_transformation = self.draw_transformation.compose(M)
+    self.canvas_redraw()
+
+
+
+
+
+
+
+
+
+
 
 #############################################################################
 #############################################################################

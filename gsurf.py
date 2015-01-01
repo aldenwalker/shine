@@ -441,6 +441,12 @@ class LiftedSurface(GeoSurface):
       lifted_edges.append(next_edge)
     print "Should take", lifted_edges[0], "to", lifted_edges[-1]
     print "i.e.", self.em_e[lifted_edges[0].ind], "to", self.em_e[lifted_edges[-1].ind]
+    GI1 = self.em_e[lifted_edges[0].ind].gi
+    GI2 = self.em_e[lifted_edges[-1].ind].gi
+    M = mobius.MobiusTrans.unit_tangent_action(GI1.start, GI1.initial_angle, GI2.start, GI2.initial_angle)
+    print "Got mobius: ", M
+    GA = M.geodesic_axis()
+    print "Got geodesic axis: ", GA
     return TP
       
       

@@ -69,6 +69,22 @@ def tri_angle_deriv(L, i, j):
     num = cscha*cschb*math.sinh(c)
   return num/den
 
+
+class HypGeodesic:
+  def __init__(self, center, radius):
+    self.center = center
+    self.radius = radius
+  def __repr__(self):
+    return 'HypGeodesic(' + str(self.center) + ',' + str(self.radius) + ')'
+  def __str__(self):
+    return repr(self)
+  @classmethod
+  def from_real_endpoints(cls, p1, p2):
+    c = (p1 + p2)/2.0
+    r = abs(p2-p1) / 2.0
+    return cls(c,r)
+
+
 class HypGeodesicInterval:
   def __init__(self, v1, v2):
     self.start = v1
