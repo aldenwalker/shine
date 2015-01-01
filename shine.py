@@ -705,6 +705,7 @@ class ShineLoop:
   def __init__(self, tk_parent, shine_parent, EP, word=None):
     self.tk_parent = tk_parent
     self.shine_parent = shine_parent
+    self.shine_main = shine_parent.shine_parent
     
     self.EP = EP
     self.word = word
@@ -712,16 +713,21 @@ class ShineLoop:
     self.W_label = tk.Label(self.tk_parent, text='Word: ' + ('(unknown)' if self.word==None else self.word))
     self.show = tk.IntVar()
     self.show.set(1)
-    self.W_show = tk.Checkbutton(self.tk_parent, text='Show', variable=self.show, command=self.shine_parent.shine_parent.emsurf_displayer.loops_redraw)
+    self.W_show = tk.Checkbutton(self.tk_parent, text='Show', variable=self.show, command=self.shine_main.emsurf_displayer.canvas_redraw)
+    self.W_geodesicify = tk.Button(self.tk_parent, text='Geoify', command=self.geodesicify)
     self.W_delete = tk.Button(self.tk_parent, text='X', command=lambda : self.shine_parent.delete_loop(self))
     
-    self.W_label.grid(row=0, column=0)
-    self.W_show.grid(row=1, column=0)
-    self.W_delete.grid(row=1, column=1)
+    self.W_label.grid(row=0, column=0, sticky=tk.W)
+    self.W_show.grid(row=1, column=0, sticky=tk.W)
+    self.W_geodesicify.grid(row=1, column=1)
+    self.W_delete.grid(row=1, column=2)
     
   def subdivide(self, old_TS, vertices_from_edges, edges_from_edges, edges_from_tris, tris_from_tris):
     self.EP.subdivide(old_TS, vertices_from_edges, edges_from_edges, edges_from_tris, tris_from_tris)
-    
+  
+  def geodesicify(self):
+    self.EP = self.shine_main.LS.geodesicify(self.EP)
+    self.shine_main.emsurf_displayer.canvas_redraw()
     
     
     

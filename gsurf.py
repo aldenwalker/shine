@@ -411,7 +411,39 @@ class LiftedSurface(GeoSurface):
   # given a topological path in the surface, find a 
   # geodesic representative of the homotopy class
   ##########################################################################
-  
+  def geodesicify(self, TP):
+    #find an acceptable lift of the first edge
+    lifted_edges = []
+    for pli in self.e_lifts[TP.edges[0].ind]:
+      pl = self.em_e[pli]
+      if (pl.on_left if TP.edges[0].sign>0 else pl.on_right) != None:
+        lifted_edges.append( SI(pli, TP.edges[0].sign) )
+        break
+    #now go through, lifting as necessary
+    #when we look at the ith index, we lift the *next* edge
+    #this includes the last edge, which is all we care about
+    ne = len(TP.edges)
+    for i in xrange(ne):
+      e1 = TP.edges[i]
+      lifted_e1 = lifted_edges[i]
+      e2 = TP.edges[(i+1)%ne]
+      tri_ind = (self.em_e[lifted_e1.ind].on_left if e1.sign>0 else self.em_e[lifted_e1.ind].on_right)
+      if tri_ind == None:
+        print "Something is wrong -- should be a triangle here"
+      tri = self.em_t[tri_ind[0]]
+      next_edge_ind_in_tri = (self.e[e2.ind].on_right if e2.sign>0 else self.e[e2.ind].on_left)[1]
+      next_edge = -tri.i_edges[next_edge_ind_in_tri]
+      if next_edge.sign != e2.sign:
+        print "Something is wrong -- edges should have the opposite sign"
+      next_tri_ind = (self.em_e[next_edge.ind].on_left if e2.sign>0 else self.em_e[next_edge.ind].on_right)
+      if next_tri_ind == None:
+        self.lift_triangle_to_lifted_edge(next_edge)
+      lifted_edges.append(next_edge)
+    print "Should take", lifted_edges[0], "to", lifted_edges[-1]
+    print "i.e.", self.em_e[lifted_edges[0].ind], "to", self.em_e[lifted_edges[-1].ind]
+    return TP
+      
+      
   
   ##########################################################################
   # print out a lifted surface
