@@ -1,5 +1,6 @@
 import tsurf
 import gsurf
+import emsurf
 import hyp
 from signedind import SignedInd as SI
 
@@ -80,6 +81,10 @@ class LiftedSurface(gsurf.GeoSurface):
         self.em_v[self.e[ei.ind].dest].append( self.em_t[ti].v[j] )
     return
   
+  #######################################################################
+  # lifts the appropriate triangle so that it contains the lifted_ei
+  # with the appropriate sign
+  #######################################################################
   def lift_triangle_to_lifted_edge(self, lifted_ei):
     s = lifted_ei.sign
     lifted_e = self.em_e[lifted_ei.ind]
@@ -164,7 +169,10 @@ class LiftedSurface(gsurf.GeoSurface):
       else:
         e.on_right = (new_ti, i)
 
-        
+  #########################################################################
+  # relift the liftedsurface by going back to the geometric surface
+  # and lifting all the triangles
+  #########################################################################
   def relay(self):
     num_edges = len(self.e)
     self.em_v = []
@@ -247,7 +255,9 @@ class LiftedSurface(gsurf.GeoSurface):
         self.lift_triangle_to_lifted_edge(lifted_ei)
         i = (i+1)%LIT
     return
-      
+  ###########################################################################
+  # act by a mobius transformation
+  ###########################################################################
   def act_by_mobius(self, M):
     self.v_hashes = dict()
     for i,v in enumerate(self.em_v):

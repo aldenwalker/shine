@@ -40,7 +40,7 @@ def polygon_edge_inds(w):
 # which the path passes through.  An edge is positively oriented if 
 # {edge direction, path direction} is a positive basis
 ############################################################################
-class TopologicalPath :
+class TopologicalPath(object) :
   def __init__(self, edges):
     self.edges = edges
   def __repr__(self):
@@ -48,8 +48,20 @@ class TopologicalPath :
   def __str__(self):
     return "TopologicalPath(" + str(self.edges) + ")"
   ##########################################################################
-  # modify the path so that it gives a path in the subdivided surface (new_TS)
-  # it returns a list of the edges which come from the original edges
+  # return the inverse path
+  ##########################################################################
+  def inverse(self):
+    return TopologicalPath([-e for e in self.edges[::-1]])
+  ##########################################################################
+  # append a path on to the current path
+  # (it's up to the user to check that the ends match (are sides of 
+  # the same triangle)
+  ##########################################################################
+  def append(self, other):
+    self.edges.extend(other.edges)
+    
+  ##########################################################################
+  # modify the path so that it gives a path in the subdivided surface
   # this does not produce a particularly smooth path, since it's not intelligent 
   # about which new edges it goes through
   ##########################################################################
@@ -310,10 +322,31 @@ class TopSurface(object) :
         else:
           self.e[ei.ind].on_right = (ti,i)
         
+    for ell in self.loops:
+      self.loops[ell].subdivide(old_self, vertices_from_edges, edges_from_edges, edges_from_tris, tris_from_tris)
     
     return (old_self, vertices_from_edges, edges_from_edges, edges_from_tris, tris_from_tris)
                        
-    
+  ##########################################################################
+  # given a word in the known loops and their inverses, return a 
+  # TopologicalPath which is the product
+  ##########################################################################
+  def loop_from_word(self, w):
+    #print "Getting the loop from the word: ", w
+    #print "Known loops: ", self.loops
+    if any([W.lower() not in self.loops for W in w]):
+      print "Unrecognized loop letter"
+      return None
+    ans = TopologicalPath([])
+    inverses = dict([ (ell.swapcase(), self.loops[ell].inverse()) for ell in self.loops])
+    for W in w:
+      if W.isupper():
+        ans.append( inverses[W] )
+      else:
+        ans.append( self.loops[W] )
+    return ans
+  
+  
   ##########################################################################
   # print out a surface
   ##########################################################################

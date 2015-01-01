@@ -408,6 +408,12 @@ class LiftedSurface(GeoSurface):
     return None
   
   ##########################################################################
+  # given a topological path in the surface, find a 
+  # geodesic representative of the homotopy class
+  ##########################################################################
+  
+  
+  ##########################################################################
   # print out a lifted surface
   ##########################################################################
   def __repr__(self):

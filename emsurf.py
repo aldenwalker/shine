@@ -109,7 +109,11 @@ class EmbeddedPath(tsurf.TopologicalPath):
   @classmethod
   def from_topological_path(cls, tp):
     return cls(tp.edges, [0.5 for e in tp.edges])
-
+  
+  @classmethod
+  def from_topological_edges(cls, edges):
+    return cls(edges, [0.5 for e in edges])
+  
   def __repr__(self):
     return str(self)
   
@@ -117,7 +121,8 @@ class EmbeddedPath(tsurf.TopologicalPath):
     return "EmbeddedPath(" + str(zip(self.edges, self.edge_coords)) + ")"
   
   def subdivide(self, old_TS, vertices_from_edges, edges_from_edges, edges_from_tris, tris_from_tris):
-    pass
+    super(EmbeddedPath, self).subdivide(old_TS, vertices_from_edges, edges_from_edges, edges_from_tris, tris_from_tris)
+    self.edge_coords = [0.5 for e in self.edges]
     
 
 ###########################################################################
@@ -128,11 +133,10 @@ class EmbeddedSurface(tsurf.TopSurface):
     self.v = TS.v
     self.e = TS.e
     self.t = TS.t
-    self.loops = TS.loops
     self.em_v = em_v
     self.em_e = em_e
     self.em_t = em_t
-    self.em_loops = em_loops
+    self.loops = em_loops
   
   @classmethod
   def from_planar_graph_file(cls, graph_filename):
@@ -267,7 +271,7 @@ class EmbeddedSurface(tsurf.TopSurface):
     #create the loops, if there are any
     loops = dict()
     for ell in PG.loops:
-      print "Making loop: ", ell, PG.loops[ell]
+      #print "Making loop: ", ell, PG.loops[ell]
       raw_loop_edges = [(SI.from_string(l) if l!='a' else 'a') for l in PG.loops[ell]]
       Lrle = len(raw_loop_edges)
       padded_loop_edges = []
@@ -292,7 +296,7 @@ class EmbeddedSurface(tsurf.TopSurface):
                        central_v.i_edges[central_v_ei1+1:] + central_v.i_edges[:central_v_ei2])
         extra_edges = [SI(x.ind, s*x.sign) for x in extra_edges for s in [1,-1]]
         padded_loop_edges.extend(extra_edges)
-      print "Padded loop edges: ", padded_loop_edges
+      #print "Padded loop edges: ", padded_loop_edges
       #now actually figure out which real edges we cross
       loop_edges = []
       Lple = len(padded_loop_edges)
@@ -329,7 +333,7 @@ class EmbeddedSurface(tsurf.TopSurface):
     ES = cls( tsurf.TopSurface(V,E,[],loops=loops), em_V, len(E)*[None], len(T)*[None], None)
     #print ES
     ES.fill_in_triangles()
-    ES.em_loops = dict([(ell, EmbeddedPath.from_topological_path(ES.loops[ell])) for ell in ES.loops])
+    ES.loops = dict([(ell, EmbeddedPath.from_topological_edges(loops[ell])) for ell in loops])
     
     ES.em_e = len(ES.e)*[None]
     for i,e in enumerate(ES.e):
@@ -340,6 +344,22 @@ class EmbeddedSurface(tsurf.TopSurface):
     
     return ES
   
+  ###########################################################################
+  # return a loop created as a product of known loops 
+  # (it just uses the topological path)
+  ###########################################################################
+  def loop_from_word(self, w):
+    tp = super(EmbeddedSurface, self).loop_from_word(w)
+    #print "Got topological path: ", tp
+    return (None if tp == None else EmbeddedPath.from_topological_path(tp))
+  ###########################################################################
+  # return the vector in R3 which is fraction t along the edge
+  ###########################################################################
+  def along_edge(self, ei, t):
+    return self.em_e[ei][0]*(1-t) + self.em_e[ei][1]*t
+  ###########################################################################
+  # subdivide the embedded surface, interpolating the new vertices
+  ###########################################################################
   def subdivide(self):
     old_nv = len(self.v)
     old_ne = len(self.e)
@@ -358,10 +378,13 @@ class EmbeddedSurface(tsurf.TopSurface):
     for ti,t in enumerate(self.t):
       self.em_t[ti] = [ self.em_v[t.i_verts[i][0]] for i in xrange(3) ]
     for ell in self.loops:
-      self.loops[ell].subdivide(old_TS, vertices_from_edges, edges_from_edges, edges_from_tris, tris_from_tris)
-      self.em_loops[ell] = EmbeddedPath.from_topological_path(self.loops[ell]) #(old_TS, vertices_from_edges, edges_from_edges, edges_from_tris, tris_from_tris)
+      self.loops[ell] = EmbeddedPath.from_topological_path(self.loops[ell]) #(old_TS, vertices_from_edges, edges_from_edges, edges_from_tris, tris_from_tris)
     return old_TS, vertices_from_edges, edges_from_edges, edges_from_tris, tris_from_tris
-      
+  
+  ##########################################################################
+  # flow an embedded surface by making each vertex position a weighted
+  # average of it and its neighbors
+  ##########################################################################
   def flow(self):
     for i,v in enumerate(self.v):
       av = R3.Vector([0,0,0])
@@ -376,6 +399,9 @@ class EmbeddedSurface(tsurf.TopSurface):
       self.em_t[i] = [self.em_v[t.i_verts[j][0]] for j in xrange(3)]
     return
   
+  ##########################################################################
+  # print out an embedded surface
+  ##########################################################################
   def __str__(self):
     ans = "Embedded surface:\n";
     ans += "Vertices: \n"
@@ -387,6 +413,9 @@ class EmbeddedSurface(tsurf.TopSurface):
     ans += "Triangles: \n"
     for i,t in enumerate(self.t):
       ans += str(i) + ": " + str(t) + "\n" + "embedded: " + str(self.em_t[i]) + "\n"
+    ans += "Loops: \n"
+    for i,ell in enumerate(self.loops):
+      ans += str(i) + ": " + str(self.loops[ell])
     return ans
 
 

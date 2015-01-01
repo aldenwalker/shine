@@ -348,8 +348,8 @@ class EmSurfaceVisualizer:
       #print "Amount: ", rgb
       di = self.canvas.create_polygon(*flat_coord_list, fill=rgb, outline=outline)
       self.drawing_items.append(di)
-    for ell in self.ES.em_loops:
-      this_loop = self.ES.em_loops[ell]
+    for ell in self.ES.loops:
+      this_loop = self.ES.loops[ell]
       for i,ei in enumerate(this_loop.edges):
         #print ei
         v11 = self.ES.e[ei.ind].source
@@ -409,17 +409,17 @@ class Shine:
     self.ES = None
     self.GS = None
     self.LS = None
-    self.loops = None    
     
     #set up the window
     self.parent = parent
     self.parent.geometry('500x500+100+100')
+    self.parent.title('Shine')
     
     self.emsurf_frame = tk.Frame(self.parent, bg='#FF0000')
     self.emsurf_displayer = ShineEmSurfDisplay(self.emsurf_frame, self)
     
     self.loop_frame = tk.Frame(self.parent, bg='#0000FF')
-    self.loop_displayer = ShineLoopDisplay(self.loop_frame)
+    self.loop_displayer = ShineLoopDisplay(self.loop_frame, self)
     
     self.parent.rowconfigure(0, weight=1)
     self.parent.columnconfigure(0, weight=1)
@@ -441,6 +441,7 @@ class Shine:
     self.actionmenu = tk.Menu(self.menubar, tearoff=0)
     self.actionmenu.add_command(label='Subdivide', command=self.subdivide)
     self.actionmenu.add_command(label='Flow', command=self.flow)
+    self.actionmenu.add_command(label='Add loop', command=self.loop_displayer.add_loop)
     self.menubar.add_cascade(label='Actions', menu=self.actionmenu)
     
     self.parent.config(menu=self.menubar)
@@ -453,7 +454,7 @@ class Shine:
       self.ES = emsurf.EmbeddedSurface.from_planar_graph_file(filename)
       self.GS = gsurf.GeoSurface.geometrize_tsurf(self.ES)
       self.LS = gsurf.LiftedSurface.lift_gsurf(self.GS)
-      self.loops = []
+      self.loop_displayer.reset()
     else:
       tkMessageBox.showerror(title='Error', message='File does not have a .pgr extension', parent=self.parent)
       return
@@ -468,8 +469,8 @@ class Shine:
     if self.ES == None:
       return
     sub_data = self.ES.subdivide()
-    for ell in self.loops:
-      ell = ell.subdivide(*sub_data)
+    for ell in self.loop_displayer.loops:
+      ell.subdivide(*sub_data)
     self.emsurf_displayer.canvas_redraw()
   
   def flow(self):
@@ -521,14 +522,14 @@ class ShineEmSurfDisplay:
     self.reset()
     
   def reset(self):
-    self.draw_viewer = R3.ProjectionViewer( R3.Vector([0,-2,1]),              \
-                                            R3.Vector([0,2,-1]),              \
+    self.draw_viewer = R3.ProjectionViewer( R3.Vector([0,-6,2]),              \
+                                            R3.Vector([0,6,-2]),              \
                                             [R3.Vector([0,0,3]), R3.Vector([1,1,-3])] )
     self.draw_transformation = R3.Matrix([[1,0,0],[0,1,0],[0,0,1]])
     self.canvas_width = int(self.canvas.config()['width'][-1])
     self.canvas_height = int(self.canvas.config()['height'][-1])
     self.draw_canvas_center = (self.canvas_width/2, self.canvas_height/2)
-    self.draw_plane_to_canvas_scale = 100.0
+    self.draw_plane_to_canvas_scale = 700.0
     self.draw_do_mesh.set(1)
     self.canvas_redraw()
     
@@ -563,6 +564,7 @@ class ShineEmSurfDisplay:
     acted_on_T = [[self.draw_transformation(x) for x in t] for t in self.shine_parent.ES.em_t]
     pT = self.draw_viewer.project_triangles(acted_on_T)
     outline = ('black' if self.draw_do_mesh.get()==1 else '')
+    # draw all the triangles
     for pt,am in pT:
       canvas_coords = [self.draw_plane_to_canvas(x) for x in pt]
       flat_coord_list = [x for p in canvas_coords for x in p]
@@ -572,7 +574,28 @@ class ShineEmSurfDisplay:
       #print "Amount: ", rgb
       di = self.canvas.create_polygon(*flat_coord_list, fill=rgb, outline=outline)
       self.drawing_items.append(di)
+    # draw the loops
+    self.loops_redraw()
     
+  def loops_redraw(self):
+    for ell in self.shine_parent.loop_displayer.loops:
+      V = [self.shine_parent.ES.along_edge(ell.EP.edges[i].ind, ell.EP.edge_coords[i]) for i in xrange(len(ell.EP.edges))]
+      V = [self.draw_transformation(v) for v in V]
+      acted_on_T = [[self.draw_transformation(x) for x in t] for t in self.shine_parent.ES.em_t]
+      for i in xrange(len(V)):
+        v1 = V[i]
+        v2 = V[(i+1)%len(V)]
+        hidden = self.draw_viewer.is_segment_hidden(acted_on_T, v1, v2)
+        #hidden = self.draw_viewer.is_point_hidden(acted_on_T, self.draw_transformation(R3.Vector([0.25, 0.75, 0])) )
+        dv1 = self.draw_plane_to_canvas(self.draw_viewer.project_point(v1))
+        dv2 = self.draw_plane_to_canvas(self.draw_viewer.project_point(v2))
+        coords = [x for v in [dv1,dv2] for x in v]
+        line_color = ('#888888' if hidden else '#000000')
+        point_color = ('#FF8888' if hidden else '#FF0000')
+        di = [ self.canvas.create_line(*coords, width=3, fill=line_color), \
+               self.canvas.create_oval(coords[0]-2, coords[1]-2, coords[0]+2, coords[1]+2, fill=point_color), \
+               self.canvas.create_oval(coords[2]-2, coords[3]-2, coords[2]+2, coords[3]+2, fill=point_color) ]
+        self.drawing_items.extend(di)
 
   def rotate(self, dir):
     if dir == 'vert_ccw' or dir == 'vert_cw':
@@ -596,31 +619,115 @@ class ShineEmSurfDisplay:
 # the list of loops
 ###########################################################################
 class ShineLoopDisplay:
-  def __init__(self, parent):
-    self.parent = parent
+  def __init__(self, tk_parent, shine_parent):
+    self.tk_parent = tk_parent
+    self.shine_parent = shine_parent
     
-    self.title = tk.Label(self.parent, text='Loops:')
-    self.add_loop_button = tk.Button(self.parent, text="+", command=self.add_loop)
+    self.title = tk.Label(self.tk_parent, text='Loops:')
+    self.add_loop_button = tk.Button(self.tk_parent, text="+", command=self.add_loop)
 
-    self.title.grid(column=0, row=0)
-    self.add_loop_button.grid(column=0, row=1)
+    self.title.grid(column=0, row=0, sticky=tk.W)
+    self.add_loop_button.grid(column=0, row=1, sticky=tk.W)
+    
+    self.loops = []
+    self.frames = []
   
   def add_loop(self):
-    print "Hello"
+    if self.shine_parent.ES == None:
+      return
+    word, EP = self.add_loop_dialog()
+    #print EP
+    if EP == None:
+      return
+    self.add_loop_button.grid_remove()
+    self.frames.append( tk.Frame(self.tk_parent, bg = '#00FF00' ) )
+    self.frames[-1].grid(column=0, row=len(self.frames))
+    self.add_loop_button.grid(column=0, row=len(self.frames)+1, sticky=tk.W)
+    self.loops.append( ShineLoop(self.frames[-1], self, EP, word=word) )
+    self.shine_parent.emsurf_displayer.canvas_redraw()
+      
+  
+  def delete_loop(self, loop_to_delete):
+    for i in xrange(len(self.loops)):
+      if self.loops[i] == loop_to_delete:
+        self.frames[i].destroy()
+        self.add_loop_button.grid_remove()
+        for j in xrange(i+1, len(self.frames)):
+          self.frames[j].grid_remove()
+          self.frames[j].grid(column=0, row=i+j)
+        del self.loops[i]
+        del self.frames[i]
+        self.add_loop_button.grid(column=0, row=len(self.frames)+1, sticky=tk.W)
+        break
+    self.shine_parent.emsurf_displayer.canvas_redraw()
   
   def reset(self):
-    pass
+    for i in xrange(len(self.loops)-1, 0, -1):
+      self.delete_loop(self.loops[i])
 
+  def add_loop_dialog(self):
+    dialog = tk.Toplevel(master=self.tk_parent)
+    dialog.title('Add loop')
+    parent_location = (self.tk_parent.winfo_rootx(), self.tk_parent.winfo_rooty())
+    dialog.geometry('+%d+%d' % (parent_location[0], parent_location[1]))
+    dialog.focus_set()
+    dialog.grab_set()
+    
+    W_word_label = tk.Label(dialog, text='Create a loop as a product:')
+    W_known_loops = tk.Label(dialog, text='Known loops: ' + str([ell for ell in self.shine_parent.ES.loops]) )
+    W_word_input = tk.Entry(dialog)
+    word_input = [None] #making it a list makes it visible to the function set_word
+    def set_word():
+      word_input[0] = W_word_input.get()
+      dialog.destroy()
+    W_word_go = tk.Button(dialog, text='Add from word', command=set_word )
+    W_cancel = tk.Button(dialog, text='Cancel', command=dialog.destroy)
+    
+    W_word_label.grid(column=0, row=0, sticky=tk.W)
+    W_known_loops.grid(column=0, row=1, sticky=tk.W)
+    W_word_input.grid(column=0, row=2, sticky=tk.W)
+    W_word_go.grid(column=0, row=3, sticky=tk.W)
+    W_cancel.grid(column=1, row=3)
+    
+    dialog.wait_window(dialog)
+    
+    if word_input[0] != None:
+      word_input = word_input[0]
+      EP = self.shine_parent.ES.loop_from_word(word_input)
+      return (word_input, EP)
+    
+    return None, None
 
+############################################################################
+# a single loop displayer
+############################################################################
+class ShineLoop:
+  def __init__(self, tk_parent, shine_parent, EP, word=None):
+    self.tk_parent = tk_parent
+    self.shine_parent = shine_parent
+    
+    self.EP = EP
+    self.word = word
+    
+    self.W_label = tk.Label(self.tk_parent, text='Word: ' + ('(unknown)' if self.word==None else self.word))
+    self.show = tk.IntVar()
+    self.show.set(1)
+    self.W_show = tk.Checkbutton(self.tk_parent, text='Show', variable=self.show, command=self.shine_parent.shine_parent.emsurf_displayer.loops_redraw)
+    self.W_delete = tk.Button(self.tk_parent, text='X', command=lambda : self.shine_parent.delete_loop(self))
+    
+    self.W_label.grid(row=0, column=0)
+    self.W_show.grid(row=1, column=0)
+    self.W_delete.grid(row=1, column=1)
+    
+  def subdivide(self, old_TS, vertices_from_edges, edges_from_edges, edges_from_tris, tris_from_tris):
+    self.EP.subdivide(old_TS, vertices_from_edges, edges_from_edges, edges_from_tris, tris_from_tris)
+    
+    
+    
+    
 
-
-
-
-
-
-
-
-
+#############################################################################
+#############################################################################
 def visualize_em_surface(ES):
   root = tk.Tk()
   vs = EmSurfaceVisualizer(root, ES)
