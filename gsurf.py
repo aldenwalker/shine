@@ -1,10 +1,12 @@
 import math
 import random
 import scipy.optimize
+import copy
 
 import hyp
 import mobius
 import tsurf
+import emsurf
 from signedind import SignedInd as SI
 
 ##############################################################################
@@ -118,10 +120,175 @@ class GeoSurface(tsurf.TopSurface):
     return gs
   
   ########################################################################
-  # given a topological path, find the geodesic geometric path
+  # given three edges and coordinates (in [0,1]) along them, compute
+  # the angle at the middle edge (this is the external angle, so 0 means
+  # that the edge is straight)
   ########################################################################
+  def angle_at_edge(self, e1, e1_t, e2, e2_t, e3, e3_t):
+    #find out the exiting angle from the first triangle
+    t1i, t1_e1 = (self.e[e1.ind].on_left if e1.sign>0 else self.e[e1.ind].on_right)
+    t1 = self.h_tris[t1i]
+    t1_e1_t = (e1_t if e1.sign>0 else 1-e1_t)
+    t1_e2 = (self.e[e2.ind].on_right if e2.sign>0 else self.e[e2.ind].on_left)[1]
+    t1_e2_t = (1-e2_t if e2.sign>0 else e2_t)
+    
+    a1 = t1.inside_final_angle(t1_e1, t1_e1_t, t1_e2, t1_e2_t)
+    
+    t2i, t2_e2 = (self.e[e2.ind].on_left if e2.sign>0 else self.e[e2.ind].on_right)
+    t2 = self.h_tris[t2i]
+    t2_e2_t = (e2_t if e2.sign>0 else 1-e2_t)
+    t2_e3 = (self.e[e3.ind].on_right if e3.sign>0 else self.e[e3.ind].on_left)[1]
+    t2_e3_t = (1-e3_t if e3.sign>0 else e3_t)
+    
+    a2 = t2.inside_final_angle(t2_e3, t2_e3_t, t2_e2, t2_e2_t) #note backwards
+    
+    return a2 - a1
+    
+  ########################################################################
+  # return the polygon (group of triangles) which surround the vertex
+  # opposite the given edge
+  ########################################################################
+  def polygon_with_entrance_edge(self, ei):
+    t0, ei_in_t0 = (self.e[ei.ind].on_left if ei.sign>0 else self.e[ei.ind].on_right)
+    vi, t0i_in_v = self.t[t0].i_verts[(ei_in_t0+2)%3]
+    tris = self.v[vi].i_tris[t0i_in_v:] + self.v[vi].i_tris[:t0i_in_v]
+    num_sides = len(tris)
+    eedges = num_sides*[None]
+    angles = num_sides*[0]
+    sides = num_sides*[None]
+    for i,(ti,tii) in enumerate(tris):
+      eedges[i] = -self.t[ti].i_edges[(tii+1)%3] 
+      sides[i] = self.h_lengths[eedges[i].ind]
+      angles[i] += self.h_tris[ti].angles[(tii+1)%3] 
+      angles[(i+1)%num_sides] += self.h_tris[ti].angles[(tii+2)%3]
+    return GeometricSurfacePolygon(self, vi, tris, eedges, sides, angles)
+      
+  ########################################################################
+  # find the maximal angle deviation along an embedded path
+  ########################################################################
+  def maximal_angle_deviation(self, EP):
+    ma = 0
+    lep = len(EP.edges)
+    for i in xrange(lep):
+      angle = self.angle_at_edge( EP.edges[(i-1)%lep], EP.edge_coords[(i-1)%lep], \
+                                  EP.edges[i], EP.edge_coords[i], \
+                                  EP.edges[(i+1)%lep], EP.edge_coords[(i+1)%lep] )
+      if abs(angle) > ma:
+        ma = abs(angle)
+    return ma
   
+  ########################################################################
+  # given an embedded path, find the geodesic geometric path
+  # if it's just a topological path, it'll convert it to a default path first
+  ########################################################################
+  def geodesicify(self, TP, tol=None):
   
+    #this tolerance says how big an angle is considered "straight"
+    if tol==None:
+      tol = 1e-3
+      
+    #make a default embedded path, if necessary
+    new_TP = copy.deepcopy(TP)
+    if isinstance(TP, emsurf.EmbeddedPath):
+      print "Already an embedded path; no need to default it"
+      EP = new_TP
+    else:
+      print "Default pathing topological path"
+      EP = emsurf.EmbeddedPath.from_topological_path(new_TP)
+    
+    #for each edge, do the following:
+    # - simplify the loop (remove edge followed by opposite edge)
+    # - find a location at which there is a nonzero angle (if there 
+    #   is no such location, then the loop is a geodesic)
+    # - our edge to focus on will be the one *before* the kink
+    # - find the vertex opposite from the edge
+    # - build the hyperbolic polygon we get by tiling around this vertex
+    # - find out where the loop enters and exits this polygon
+    # - replace the loop inside the polygon with the geodesic between the 
+    #   entry and exit points
+    
+    #it's slightly complicated because the number of edges can change!
+    
+    print "Geodesicifying embedded path: ", EP
+    
+    EP.simplify()
+    
+    print "Simplified: ", EP
+    
+    current_EP_index = 0
+    
+    while True:
+      lep = len(EP.edges)
+      
+      print "Current EP", EP
+      print "EP index:", current_EP_index
+      
+      # #find an edge with the kink
+#       print "Looking for edge with a kink"
+#       kinked_edge_i = None
+#       for i in xrange(lep):
+#         angle = self.angle_at_edge( EP.edges[(i-1)%lep], EP.edge_coords[(i-1)%lep], \
+#                                     EP.edges[i], EP.edge_coords[i], \
+#                                     EP.edges[(i+1)%lep], EP.edge_coords[(i+1)%lep] )
+#         print "Found angle", angle, "at edge", i, "i.e.", EP.edges[i]
+#         if abs(angle) > tol:
+#           kinked_edge_i = i
+#           break
+#       if kinked_edge_i == None:
+#         break
+#       
+#       #step back to the previous edge
+#       poly_entrance_edge_i = (kinked_edge_i-1)%len(EP.edges)
+      
+      poly_entrance_edge_i = current_EP_index
+      
+      #build the polygon
+      HP = self.polygon_with_entrance_edge(EP.edges[poly_entrance_edge_i])
+      
+      print "Built the polygon\n", HP
+      
+      #find the exit edge
+      poly_exit_edge_i = poly_entrance_edge_i
+      while EP.edges[poly_exit_edge_i] not in HP.exit_edges:
+        poly_exit_edge_i = (poly_exit_edge_i + 1 if poly_exit_edge_i<len(EP.edges)-1 else 0)
+      
+      print "Found the entrance and exit edge indices", poly_entrance_edge_i, " ", poly_exit_edge_i
+      print "Which is edges", EP.edges[poly_entrance_edge_i], "and", EP.edges[poly_exit_edge_i]
+      
+      #find the list of edges in the straightened geodesic
+      replacement_edges, replacement_edge_coords = HP.geodesic_path(EP.edges[poly_entrance_edge_i], \
+                                                                    EP.edge_coords[poly_entrance_edge_i], \
+                                                                    EP.edges[poly_exit_edge_i], \
+                                                                    EP.edge_coords[poly_exit_edge_i])
+      
+      print "Found replacement edges: ", replacement_edges
+      print "And coords: ", replacement_edge_coords
+      
+      #delete the interior edges and replace them; note there 
+      #are two cases depending on whether we overlap the end of the list
+      if poly_entrance_edge_i < poly_exit_edge_i: #we don't overlap the end
+        peei = poly_entrance_edge_i
+        del EP.edges[peei+1:poly_exit_edge_i]
+        del EP.edge_coords[peei+1:poly_exit_edge_i]
+        EP.edges[peei+1:peei+1] = replacement_edges
+        EP.edge_coords[peei+1:peei+1] = replacement_edge_coords
+      else: #we do overlap
+        del EP.edges[poly_entrance_edge_i+1:]
+        del EP.edges[:poly_exit_edge_i]
+        del EP.edge_coords[poly_entrance_edge_i+1:]
+        del EP.edge_coords[:poly_exit_edge_i]
+        EP.edges.extend(replacement_edges)
+        EP.edge_coords.extend(replacement_edge_coords)
+      
+      current_EP_index = poly_entrance_edge_i+1
+      if current_EP_index >= len(EP.edges):
+        current_EP_index = 0
+        #check to see if we are done
+        if self.maximal_angle_deviation(EP) < tol:
+          break
+        
+    #########
+    return EP
   
   #########################################################################
   # Print a geometric surface
@@ -145,7 +312,76 @@ class GeoSurface(tsurf.TopSurface):
 
 
 
+############################################################################
+# this is a polygon in a surface (a bunch of triangles), and it 
+# builds the model polygon
+############################################################################
+class GeometricSurfacePolygon:
+  def __init__(self, GS, vi, tris, eedges, sides, angles):
+    self.GS = GS
+    self.central_vert = vi
+    self.tris = tris
+    self.exit_edges = eedges
+    self.HP = hyp.HypPolygon(sides, angles)
+  
+  ########################################################################
+  # return the edges and edge coords of the geodesic which goes from edge
+  # e1 at e1t to edge e2 at e2t.  Note the edges are edge indices in the 
+  # main surface, so we have to search for them
+  ########################################################################
+  def geodesic_path(self, e1, e1t, e2, e2t):
+    nv = len(self.tris)
+    enter_index = self.exit_edges.index(-e1)
+    exit_index = self.exit_edges.index(e2)
+    enter_t = (e1t if e1.sign>0 else 1-e1t)
+    exit_t = (e2t if e2.sign<0 else 1-e2t)
+    enter_angle = self.HP.enter_angle(enter_index, enter_t, exit_index, exit_t)
+    
+    print "Found the entrance angle: ", enter_angle
+    
+    #now walk through the polygon
+    added_edges = []
+    added_edge_coords = []
+    final_tri = self.tris[exit_index][0] #if we get this, we are done
+    current_edge = e1
+    current_edge_t = e1t
+    current_angle = enter_angle
+    current_tri = self.tris[enter_index][0]
+    while current_tri != final_tri:
+      print "edge, t, angle, tri =", current_edge, current_edge_t, current_angle, current_tri
+    
+      ind_in_tri = (self.GS.e[current_edge.ind].on_left if current_edge.sign>0 else \
+                    self.GS.e[current_edge.ind].on_right)[1]
+      t_in_tri = (current_edge_t if current_edge.sign>0 else 1-current_edge_t)
+      print "ind in tri, t in tri:", ind_in_tri, t_in_tri
+      exit_i_in_tri, exit_t, exit_angle = self.GS.h_tris[current_tri].exit_t_and_angle(ind_in_tri, t_in_tri, current_angle)
+      print "Exit: ", exit_i_in_tri, exit_t, exit_angle
+      next_edge = -self.GS.t[current_tri].i_edges[exit_i_in_tri]
+      added_edges.append(next_edge)
+      added_edge_coords.append( (1-exit_t if next_edge.sign>0 else exit_t) )
+      ###
+      current_edge = next_edge
+      current_edge_t = (1-exit_t if next_edge.sign>0 else exit_t)
+      current_angle = exit_angle
+      current_tri = (self.GS.e[next_edge.ind].on_left if next_edge.sign>0 else \
+                     self.GS.e[next_edge.ind].on_right)[0]
+      if current_edge in self.exit_edges:
+        print "We've found an exit edge without hitting the edge we were supposed to!"
+        return 
+    return added_edges, added_edge_coords
 
+  ###########################################################################
+  # print it out
+  ###########################################################################
+  def __repr__(self):
+    return str(self)
+  def __str__(self):
+    ans = ''
+    ans += "Polygon with " + str(len(self.tris)) + " sides and triangles: " + str(self.tris) + '\n'
+    ans += 'The exit edges are ' + str(self.exit_edges) + "\n"
+    ans += 'Around vertex ' + str(self.central_vert) + "\n"
+    ans += 'The hyperbolic polygon is: \n' + str(self.HP)
+    return ans
 
 #############################################################################
 # Realized vertices, edges, triangles in hyperbolic space which cover a 

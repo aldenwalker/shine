@@ -480,7 +480,8 @@ class Shine:
   def reset(self):
     self.emsurf_displayer.reset()
     self.loop_displayer.reset()
-    self.liftedsurf_displayer.reset()
+    if self.liftedsurf_displayer != None:
+      self.liftedsurf_displayer.reset()
   
   def subdivide(self):
     if self.ES == None:
@@ -743,7 +744,8 @@ class ShineLoop:
     self.EP.subdivide(old_TS, vertices_from_edges, edges_from_edges, edges_from_tris, tris_from_tris)
   
   def geodesicify(self):
-    self.EP = self.shine_main.LS.geodesicify(self.EP)
+    #self.EP = self.shine_main.LS.geodesicify(self.EP)
+    self.EP = self.shine_main.GS.geodesicify(self.EP)
     self.shine_main.emsurf_displayer.canvas_redraw()
     
     
@@ -773,9 +775,9 @@ class ShineHypSurfaceDisplay:
     self.window.columnconfigure(0, weight=1)
     
     self.canvas.grid(column=0, row=0, rowspan=3, columnspan=3, sticky=tk.W+tk.E+tk.N+tk.S)
-    self.button_rotate_left.grid(column=1, row=0)
-    self.button_rotate_right.grid(column=2, row=0)
-    self.check_propagate.grid(column=1, row=1)
+    self.button_rotate_left.grid(column=1, row=0, sticky=tk.W+tk.E)
+    self.button_rotate_right.grid(column=2, row=0,sticky=tk.W+tk.E)
+    self.check_propagate.grid(column=1, row=1, columnspan=2, sticky=tk.W)
     
     self.draw_transformation = mobius.MobiusTrans(1,0,0,1)
     self.draw_scale = 50.0

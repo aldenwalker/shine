@@ -123,7 +123,25 @@ class EmbeddedPath(tsurf.TopologicalPath):
   def subdivide(self, old_TS, vertices_from_edges, edges_from_edges, edges_from_tris, tris_from_tris):
     super(EmbeddedPath, self).subdivide(old_TS, vertices_from_edges, edges_from_edges, edges_from_tris, tris_from_tris)
     self.edge_coords = [0.5 for e in self.edges]
-    
+  
+  def simplify(self):
+    i=0
+    #simplify the interior
+    while i < len(self.edges)-1:
+      if self.edges[i] == -self.edges[i+1]:
+        del self.edges[i]
+        del self.edges[i]
+        del self.edge_coords[i]
+        del self.edge_coords[i]
+        i = i + (-1 if i > 0 else 0)
+      else:
+        i += 1
+    #cyclically simplify
+    while self.edges[0] == -self.edges[-1]:
+      del self.edges[0]
+      del self.edges[-1]
+      del self.edge_coords[0]
+      del self.edge_coords[-1]
 
 ###########################################################################
 # a topological surface, embedded in R3

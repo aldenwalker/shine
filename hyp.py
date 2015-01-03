@@ -50,6 +50,24 @@ def tri_angle(L, ind):
   r = top/bottom
   return rough_acos(r)
 
+def tri_opposite_length(ell1, angle, ell2):
+  """returns the length of the side of the triangle opposite angle"""
+  return math.acosh(  math.cosh(ell1)*math.cosh(ell2) -                  \
+                      math.sinh(ell1)*math.sinh(ell2)*math.cos(angle) )
+
+def tri_angle_side_angle(a1, s, a2):
+  """if the sides go [s,X,Y] with angles a1, a2, on either side of s, this 
+  function returns X,Y"""
+  #find the remaining angle
+  S = math.acos(math.sin(a1)*math.sin(a2)*math.cosh(s) - math.cos(a1)*math.cos(a2))
+  #use the law of sines to get the other sides
+  sin_ratio = math.sinh(s)/math.sin(S)
+  X = math.asinh(sin_ratio*math.sin(a1))
+  Y = math.asinh(sin_ratio*math.sin(a2))
+  return X,Y
+  
+
+
 def tri_angle_deriv(L, i, j):
   """compute the derivative of angle i with respect to side length j"""
   a = L[i]
@@ -153,6 +171,9 @@ class HypGeodesicInterval:
   def __str__(self):
     return "GI(" + str(self.start) + "," +  str(self.end) + ")"
 
+#########################################################################
+# a hyperbolic triangle
+#########################################################################
 class HypTri:
   def __init__(self, lengths):
     self.lengths = lengths
@@ -185,7 +206,112 @@ class HypTri:
     #rotate right so it aligns with the topological triangle
     vs = vs[-side_ind:] + vs[:-side_ind]
     return EmHypTri.from_vertices(vs)
+  
+  #########################################################################
+  # returns the angle between (the geodesic joining e1t along edge e1i
+  # to e2t along edge e2i) and edge e2i.  it returns the angle we get to the
+  # *left* of the incoming geodesic
+  #########################################################################
+  def inside_final_angle(self, e1i, e1t, e2i, e2t):
+    if e2i == (e1i+1)%3:
+      x = (1-e1t)*self.lengths[e1i]
+      a = self.angles[e2i]
+      y = e2t*self.lengths[e2i]
+      arc_len = tri_opposite_length(x,a,y)
+      wrong_angle = tri_angle([arc_len, x, y], 0)
+      angle = math.pi - wrong_angle
+    else:
+      x = (1-e2t)*self.lengths[e2i]
+      a = self.angles[e1i]
+      y = e1t*self.lengths[e1i]
+      arc_len = tri_opposite_length(x,a,y)
+      angle = tri_angle([x,y,arc_len],0)
+    return angle
+  
+  #########################################################################
+  # given a side on which we enter, and an angle, figure out which edge it 
+  # hits, where on the edge, and with what angle it leaves (angle to the left)
+  #########################################################################
+  def exit_t_and_angle(self, i, t, angle_in):
+    ip1 = (i+1)%3
+    ip2 = (i+2)%3
+    central_cut_len = tri_opposite_length( (1-t)*self.lengths[i], \
+                                           self.angles[ip1],        \
+                                           self.lengths[ip1] )
+    central_left_angle = tri_angle( [ (1-t)*self.lengths[i],        \
+                                      self.lengths[ip1],            \
+                                      central_cut_len ], 0 )
+    if angle_in < central_left_angle:
+      out_i = ip1
+      outside_len, inside_len = tri_angle_side_angle( angle_in,                \
+                                                      (1-t)*self.lengths[i], \
+                                                      self.angles[ip1] )
+      out_t = outside_len / self.lengths[ip1]
+      out_angle = math.pi - tri_angle( [inside_len, (1-t)*self.lengths[i], outside_len], 0)
+    else:
+      out_i = ip2
+      alpha = math.pi - angle_in
+      inside_len, outside_len = tri_angle_side_angle( self.angles[i],         \
+                                                      t*self.lengths[i],      \
+                                                      alpha )
+      out_t = 1 - (outside_len / self.lengths[ip2])
+      out_angle = tri_angle( [outside_len, t*self.lengths[i], inside_len], 0)
+    return out_i, out_t, out_angle
+      
+  
+#########################################################################
+# a hyperbolic polygon
+#########################################################################
+class HypPolygon:
+  def __init__(self, sides, angles):
+    self.nsides = len(sides)
+    self.sides = sides
+    self.angles = angles
+  
+  ######################################################################
+  # return the angle (to the right) of the geodesic connecting the 
+  # point a fraction enter_t of the way along edge enter_index to the point
+  # a fraction exit_t along the edge exit_index
+  ######################################################################
+  def enter_angle(self, enter_index, enter_t, exit_index, exit_t):
+    #draw edges to each of the intermediate vertices
+    current_intermediate_vertex = (enter_index+1)%self.nsides
+    current_extra_edge_len = self.sides[enter_index]*(1-enter_t)
+    current_angle_cut_off = 0
+    cumulative_enter_angle = 0
+    while current_intermediate_vertex != exit_index:
+      remaining_vertex_angle = self.angles[current_intermediate_vertex] - current_angle_cut_off
+      next_extra_edge_len = tri_opposite_length(current_extra_edge_len,       \
+                                                remaining_vertex_angle,       \
+                                                self.sides[current_intermediate_vertex] )
+      current_tri_sides = [current_extra_edge_len,                          \
+                           self.sides[current_intermediate_vertex],         \
+                           next_extra_edge_len]
+      ##
+      current_intermediate_vertex = (current_intermediate_vertex+1)%self.nsides
+      current_extra_edge_len = next_extra_edge_len
+      current_angle_cut_off = tri_angle(current_tri_sides, 2)
+      cumulative_enter_angle += tri_angle(current_tri_sides, 0)
+    #now do the final triangle, 
+    remaining_vertex_angle = self.angles[current_intermediate_vertex] - current_angle_cut_off
+    next_extra_edge_len = tri_opposite_length( current_extra_edge_len,          \
+                                              remaining_vertex_angle,         \
+                                              self.sides[exit_index]*exit_t )
+    cumulative_enter_angle += tri_angle( [current_extra_edge_len,            \
+                                          self.sides[exit_index]*exit_t,     \
+                                          next_extra_edge_len], 0 )
+    return cumulative_enter_angle
+    
+  ########################################################################
+  # print
+  ########################################################################
+  def __str__(self):
+    ans = 'Hyperbolic polygon with ' + str(self.nsides) + ' sides\n'
+    ans += 'Sides: ' + str(self.sides) + '\n'
+    ans += 'Angles: ' + str(self.angles)
+    return ans
 
+  
 class EmHypTri(HypTri):
   def __init__(self, GI):
     self.sides = [gi for gi in GI]
