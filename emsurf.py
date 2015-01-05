@@ -148,9 +148,9 @@ class EmbeddedPath(tsurf.TopologicalPath):
 ###########################################################################
 class EmbeddedSurface(tsurf.TopSurface):
   def __init__(self, TS, em_v, em_e, em_t, em_loops):
-    self.v = TS.v
-    self.e = TS.e
-    self.t = TS.t
+    self.v = copy.deepcopy(TS.v)
+    self.e = copy.deepcopy(TS.e)
+    self.t = copy.deepcopy(TS.t)
     self.em_v = em_v
     self.em_e = em_e
     self.em_t = em_t

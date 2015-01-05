@@ -12,6 +12,15 @@ import random
 import Tkinter as tk
 import tkFileDialog
 import tkMessageBox
+import tkColorChooser
+
+def clamp(x):
+  """clamp values between 0 and 255"""
+  if x < 0:
+    return 0
+  if x > 255:
+    return 255
+  return x
 
 def arc_disjoint_from_box(cc, cr, ca1, ca2, br, bh ) :
   """is the circular arc at center cc, radius cr, between angles ca1, ca2
@@ -436,7 +445,7 @@ class Shine:
     self.filemenu = tk.Menu(self.menubar, tearoff=0)
     self.filemenu.add_command(label='Open', command=self.open_file)
     self.filemenu.add_command(label='Save session')
-    self.filemenu.add_command(label='Export')
+    self.filemenu.add_command(label='Export', command=self.export)
     self.filemenu.add_command(label='Quit', command=self.parent.destroy)
     self.menubar.add_cascade(label='File', menu=self.filemenu)
     self.viewmenu = tk.Menu(self.menubar, tearoff=0)
@@ -457,7 +466,7 @@ class Shine:
       return
     if filename[-3:] == 'pgr':
       self.ES = emsurf.EmbeddedSurface.from_planar_graph_file(filename)
-      self.GS = gsurf.GeoSurface.geometrize_tsurf(self.ES)
+      self.GS = gsurf.GeometricSurface.geometrize_tsurf(self.ES)
       self.LS = gsurf.LiftedSurface.lift_gsurf(self.GS)
     else:
       tkMessageBox.showerror(title='Error', message='File does not have a .pgr extension', parent=self.parent)
@@ -487,16 +496,56 @@ class Shine:
     if self.ES == None:
       return
     sub_data = self.ES.subdivide()
+    self.GS.subdivide()
+    self.LS = gsurf.LiftedSurface.lift_gsurf(self.GS)
     for ell in self.loop_displayer.loops:
       ell.subdivide(*sub_data)
+      
     self.emsurf_displayer.canvas_redraw()
+    if self.do_show_lift.get() == 1:
+      self.liftedsurf_displayer.canvas_redraw()
   
   def flow(self):
     if self.ES == None:
       return
     self.ES.flow()
     self.emsurf_displayer.canvas_redraw()
+  
+  def export(self):
+    dialog = tk.Toplevel(master=self.parent)
+    dialog.title('Export')
+    parent_location = (self.parent.winfo_rootx(), self.parent.winfo_rooty())
+    dialog.geometry('+%d+%d' % (parent_location[0], parent_location[1]))
+    dialog.focus_set()
+    dialog.grab_set()
     
+    export_as = tk.StringVar()
+    export_as.set('svg')
+    W_export_as_label = tk.Label(dialog, text='Export as:')
+    W_export_svg = tk.RadioButton(dialog, text='svg', variable=export_as, value='svg')
+    W_surface_option_frame = tk.LabelFrame(dialog, text='Surface options')
+    W_surface_outline
+    W_loop_option_frame = tk.LabelFrame(dialog, text='Loop options')
+    
+    
+    
+    W_word_label = tk.Label(dialog, text='Create a loop as a product:')
+    W_known_loops = tk.Label(dialog, text='Known loops: ' + str([ell for ell in self.shine_parent.ES.loops]) )
+    W_word_input = tk.Entry(dialog)
+    word_input = [None] #making it a list makes it visible to the function set_word
+    def set_word():
+      word_input[0] = W_word_input.get()
+      dialog.destroy()
+    W_word_go = tk.Button(dialog, text='Add from word', command=set_word )
+    W_cancel = tk.Button(dialog, text='Cancel', command=dialog.destroy)
+    
+    W_word_label.grid(column=0, row=0, sticky=tk.W)
+    W_known_loops.grid(column=0, row=1, sticky=tk.W)
+    W_word_input.grid(column=0, row=2, sticky=tk.W)
+    W_word_go.grid(column=0, row=3, sticky=tk.W)
+    W_cancel.grid(column=1, row=3)
+    
+    dialog.wait_window(dialog)
 
 ############################################################################
 # subvisualizer based on the embedded surface visualizer
@@ -583,7 +632,7 @@ class ShineEmSurfDisplay:
     pT = self.draw_viewer.project_triangles(acted_on_T)
     outline = ('black' if self.draw_do_mesh.get()==1 else '')
     # draw all the triangles
-    for pt,am in pT:
+    for i, (pt,am) in enumerate(pT):
       canvas_coords = [self.draw_plane_to_canvas(x) for x in pt]
       flat_coord_list = [x for p in canvas_coords for x in p]
       grayscale = int(128*(am+1))
@@ -597,22 +646,24 @@ class ShineEmSurfDisplay:
     
   def loops_redraw(self):
     for ell in self.shine_parent.loop_displayer.loops:
+      if ell.show.get() == 0:
+        continue
       V = [self.shine_parent.ES.along_edge(ell.EP.edges[i].ind, ell.EP.edge_coords[i]) for i in xrange(len(ell.EP.edges))]
       V = [self.draw_transformation(v) for v in V]
       acted_on_T = [[self.draw_transformation(x) for x in t] for t in self.shine_parent.ES.em_t]
       for i in xrange(len(V)):
         v1 = V[i]
         v2 = V[(i+1)%len(V)]
-        hidden = self.draw_viewer.is_segment_hidden(acted_on_T, v1, v2)
+        hidden = False #self.draw_viewer.is_segment_hidden(acted_on_T, v1, v2)
         #hidden = self.draw_viewer.is_point_hidden(acted_on_T, self.draw_transformation(R3.Vector([0.25, 0.75, 0])) )
         dv1 = self.draw_plane_to_canvas(self.draw_viewer.project_point(v1))
         dv2 = self.draw_plane_to_canvas(self.draw_viewer.project_point(v2))
         coords = [x for v in [dv1,dv2] for x in v]
-        line_color = ('#888888' if hidden else '#000000')
+        line_color = ell.color #('#888888' if hidden else '#000000')
         point_color = ('#FF8888' if hidden else '#FF0000')
-        di = [ self.canvas.create_line(*coords, width=3, fill=line_color), \
-               self.canvas.create_oval(coords[0]-2, coords[1]-2, coords[0]+2, coords[1]+2, fill=point_color), \
-               self.canvas.create_oval(coords[2]-2, coords[3]-2, coords[2]+2, coords[3]+2, fill=point_color) ]
+        di = [ self.canvas.create_line(*coords, width=3, fill=line_color) ] #, \
+               #self.canvas.create_oval(coords[0]-2, coords[1]-2, coords[0]+2, coords[1]+2, fill=point_color), \
+               #self.canvas.create_oval(coords[2]-2, coords[3]-2, coords[2]+2, coords[3]+2, fill=point_color) ]
         self.drawing_items.extend(di)
 
   def rotate(self, dir):
@@ -627,6 +678,14 @@ class ShineEmSurfDisplay:
                                             [0, math.cos(ang), -math.sin(ang)], \
                                             [0, math.sin(ang), math.cos(ang)]])*self.draw_transformation
     self.canvas_redraw()
+  
+  def triangle_deviation(self, i):
+    embedded_lengths = [ (self.shine_parent.ES.em_t[i][(j+1)%3] - self.shine_parent.ES.em_t[i][j]).norm() for j in xrange(3) ]
+    hyp_lengths = [ self.shine_parent.GS.h_tris[i].lengths[j] for j in xrange(3) ]
+    scaling_factor = hyp_lengths[0] / embedded_lengths[0]
+    scaled_lens = [scaling_factor*x for x in embedded_lengths]
+    deviation = sum([ (hyp_lengths[j]-scaled_lens[j])**2 for j in xrange(3) ])
+    return deviation
   
   def zoom(self, dir):
     #self.draw_viewer.zoom( (0.1 if dir=='in' else 1.1) )
@@ -727,19 +786,27 @@ class ShineLoop:
     
     self.EP = EP
     self.word = word
+    self.color = '#000000'
     
     self.W_label = tk.Label(self.tk_parent, text='Word: ' + ('(unknown)' if self.word==None else self.word))
     self.show = tk.IntVar()
     self.show.set(1)
     self.W_show = tk.Checkbutton(self.tk_parent, text='Show', variable=self.show, command=self.shine_main.emsurf_displayer.canvas_redraw)
+    self.W_color = tk.Button(self.tk_parent, command=lambda :self.set_color(tkColorChooser.askcolor()[1]), bg=self.color )
     self.W_geodesicify = tk.Button(self.tk_parent, text='Geoify', command=self.geodesicify)
     self.W_delete = tk.Button(self.tk_parent, text='X', command=lambda : self.shine_parent.delete_loop(self))
     
-    self.W_label.grid(row=0, column=0, sticky=tk.W)
-    self.W_show.grid(row=1, column=0, sticky=tk.W)
-    self.W_geodesicify.grid(row=1, column=1)
-    self.W_delete.grid(row=1, column=2)
-    
+    self.W_label.grid(row=0, column=0, columnspan=3, sticky=tk.W)
+    self.W_show.grid(row=1, column=0, columnspan=3, sticky=tk.W)
+    self.W_color.grid(row=2, column=0, sticky=tk.W)
+    self.W_geodesicify.grid(row=2, column=1)
+    self.W_delete.grid(row=2, column=2)
+  
+  def set_color(self, c):
+    self.color = c
+    self.W_color.config(bg=self.color)
+    self.shine_main.emsurf_displayer.canvas_redraw()
+  
   def subdivide(self, old_TS, vertices_from_edges, edges_from_edges, edges_from_tris, tris_from_tris):
     self.EP.subdivide(old_TS, vertices_from_edges, edges_from_edges, edges_from_tris, tris_from_tris)
   
@@ -1028,7 +1095,7 @@ def run_shine():
 
 def test():
   T = tsurf.TopSurface(method='polygon', w='abABcdCD')
-  G = gsurf.GeoSurface.geometrize_tsurf(T)
+  G = gsurf.GeometricSurface.geometrize_tsurf(T)
   L = liftedsurf.LiftedSurface.lift_gsurf(G)
   visualize_surface(L)
   

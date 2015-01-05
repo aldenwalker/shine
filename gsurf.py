@@ -12,11 +12,12 @@ from signedind import SignedInd as SI
 ##############################################################################
 # Geometric (hyperbolic) surface
 ##############################################################################
-class GeoSurface(tsurf.TopSurface):
+class GeometricSurface(tsurf.TopSurface):
   def __init__(self, TS, lens):
-    self.v = TS.v
-    self.e = TS.e
-    self.t = TS.t
+    self.v = copy.deepcopy(TS.v)
+    self.e = copy.deepcopy(TS.e)
+    self.t = copy.deepcopy(TS.t)
+    self.loops = dict()
     self.h_lengths = lens
     self.h_tris = [hyp.HypTri([lens[ei.ind] for ei in T.i_edges]) for T in self.t]
   
@@ -120,6 +121,45 @@ class GeoSurface(tsurf.TopSurface):
     return gs
   
   ########################################################################
+  # subdivide a geometric surface
+  ########################################################################
+  def subdivide(self):
+    old_nv = len(self.v)
+    old_ne = len(self.e)
+    old_nt = len(self.t)
+    old_TS, vertices_from_edges, edges_from_edges, edges_from_tris, tris_from_tris = super(GeometricSurface, self).subdivide()
+    
+    self.old_h_lengths = self.h_lengths
+    self.h_lengths = len(self.e)*[None]
+    self.old_h_tris = self.h_tris
+    self.h_tris = len(self.t)*[None]
+    
+    #divide each of the previous edges in two
+    for i in xrange(old_ne):
+      e1i, e2i = edges_from_edges[i]
+      self.h_lengths[e1i] = self.old_h_lengths[i]/2.0
+      self.h_lengths[e2i] = self.old_h_lengths[i]/2.0
+    
+    #the remaining edges will have their lengths fixed
+    for i in xrange(old_nt):
+      for j in xrange(3):
+        ell1 = self.old_h_tris[i].lengths[(j-1)%3] / 2.0
+        angle = self.old_h_tris[i].angles[j]
+        ell2 = self.old_h_tris[i].lengths[j] / 2.0
+        new_edge_i = edges_from_tris[i][j]
+        self.h_lengths[new_edge_i] = hyp.tri_opposite_length(ell1, angle, ell2)
+    
+    if None in self.h_lengths:
+      print "Haven't found all the edges?"
+      raise ValueError("yo moma")
+    
+    #now the triangles get their lengths from the edges
+    for i in xrange(len(self.t)):
+      self.h_tris[i] = hyp.HypTri( [ self.h_lengths[ self.t[i].i_edges[j].ind ] for j in xrange(3) ] )
+
+    return old_TS, vertices_from_edges, edges_from_edges, edges_from_tris, tris_from_tris
+  
+  ########################################################################
   # given three edges and coordinates (in [0,1]) along them, compute
   # the angle at the middle edge (this is the external angle, so 0 means
   # that the edge is straight)
@@ -190,10 +230,10 @@ class GeoSurface(tsurf.TopSurface):
     #make a default embedded path, if necessary
     new_TP = copy.deepcopy(TP)
     if isinstance(TP, emsurf.EmbeddedPath):
-      print "Already an embedded path; no need to default it"
+      #print "Already an embedded path; no need to default it"
       EP = new_TP
     else:
-      print "Default pathing topological path"
+      #print "Default pathing topological path"
       EP = emsurf.EmbeddedPath.from_topological_path(new_TP)
     
     #for each edge, do the following:
@@ -209,19 +249,19 @@ class GeoSurface(tsurf.TopSurface):
     
     #it's slightly complicated because the number of edges can change!
     
-    print "Geodesicifying embedded path: ", EP
+    #print "Geodesicifying embedded path: ", EP
     
     EP.simplify()
     
-    print "Simplified: ", EP
+    #print "Simplified: ", EP
     
     current_EP_index = 0
     
     while True:
       lep = len(EP.edges)
       
-      print "Current EP", EP
-      print "EP index:", current_EP_index
+      #print "Current EP", EP
+      #print "EP index:", current_EP_index
       
       # #find an edge with the kink
 #       print "Looking for edge with a kink"
@@ -245,15 +285,15 @@ class GeoSurface(tsurf.TopSurface):
       #build the polygon
       HP = self.polygon_with_entrance_edge(EP.edges[poly_entrance_edge_i])
       
-      print "Built the polygon\n", HP
+      #print "Built the polygon\n", HP
       
       #find the exit edge
       poly_exit_edge_i = poly_entrance_edge_i
       while EP.edges[poly_exit_edge_i] not in HP.exit_edges:
         poly_exit_edge_i = (poly_exit_edge_i + 1 if poly_exit_edge_i<len(EP.edges)-1 else 0)
       
-      print "Found the entrance and exit edge indices", poly_entrance_edge_i, " ", poly_exit_edge_i
-      print "Which is edges", EP.edges[poly_entrance_edge_i], "and", EP.edges[poly_exit_edge_i]
+      #print "Found the entrance and exit edge indices", poly_entrance_edge_i, " ", poly_exit_edge_i
+      #print "Which is edges", EP.edges[poly_entrance_edge_i], "and", EP.edges[poly_exit_edge_i]
       
       #find the list of edges in the straightened geodesic
       replacement_edges, replacement_edge_coords = HP.geodesic_path(EP.edges[poly_entrance_edge_i], \
@@ -261,8 +301,8 @@ class GeoSurface(tsurf.TopSurface):
                                                                     EP.edges[poly_exit_edge_i], \
                                                                     EP.edge_coords[poly_exit_edge_i])
       
-      print "Found replacement edges: ", replacement_edges
-      print "And coords: ", replacement_edge_coords
+      #print "Found replacement edges: ", replacement_edges
+      #print "And coords: ", replacement_edge_coords
       
       #delete the interior edges and replace them; note there 
       #are two cases depending on whether we overlap the end of the list
@@ -284,7 +324,9 @@ class GeoSurface(tsurf.TopSurface):
       if current_EP_index >= len(EP.edges):
         current_EP_index = 0
         #check to see if we are done
-        if self.maximal_angle_deviation(EP) < tol:
+        mad = self.maximal_angle_deviation(EP)
+        print "Maximum angle deviation:", mad
+        if mad < tol:
           break
         
     #########
@@ -337,7 +379,7 @@ class GeometricSurfacePolygon:
     exit_t = (e2t if e2.sign<0 else 1-e2t)
     enter_angle = self.HP.enter_angle(enter_index, enter_t, exit_index, exit_t)
     
-    print "Found the entrance angle: ", enter_angle
+    #print "Found the entrance angle: ", enter_angle
     
     #now walk through the polygon
     added_edges = []
@@ -348,14 +390,14 @@ class GeometricSurfacePolygon:
     current_angle = enter_angle
     current_tri = self.tris[enter_index][0]
     while current_tri != final_tri:
-      print "edge, t, angle, tri =", current_edge, current_edge_t, current_angle, current_tri
+      #print "edge, t, angle, tri =", current_edge, current_edge_t, current_angle, current_tri
     
       ind_in_tri = (self.GS.e[current_edge.ind].on_left if current_edge.sign>0 else \
                     self.GS.e[current_edge.ind].on_right)[1]
       t_in_tri = (current_edge_t if current_edge.sign>0 else 1-current_edge_t)
-      print "ind in tri, t in tri:", ind_in_tri, t_in_tri
+      #print "ind in tri, t in tri:", ind_in_tri, t_in_tri
       exit_i_in_tri, exit_t, exit_angle = self.GS.h_tris[current_tri].exit_t_and_angle(ind_in_tri, t_in_tri, current_angle)
-      print "Exit: ", exit_i_in_tri, exit_t, exit_angle
+      #print "Exit: ", exit_i_in_tri, exit_t, exit_angle
       next_edge = -self.GS.t[current_tri].i_edges[exit_i_in_tri]
       added_edges.append(next_edge)
       added_edge_coords.append( (1-exit_t if next_edge.sign>0 else exit_t) )
@@ -426,7 +468,7 @@ class CoveringTri(tsurf.Triangle):
 ############################################################################
 # A cover of a geometric surface
 ############################################################################
-class LiftedSurface(GeoSurface):
+class LiftedSurface(GeometricSurface):
   def __init__(self, GS, ev, ee, et, v_lifts, e_lifts, t_lifts):
     self.v, self.e, self.t = GS.v, GS.e, GS.t
     self.h_tris, self.h_lengths = GS.h_tris, GS.h_lengths
@@ -684,8 +726,6 @@ class LiftedSurface(GeoSurface):
     GA = M.geodesic_axis()
     print "Got geodesic axis: ", GA
     return TP
-      
-      
   
   ##########################################################################
   # print out a lifted surface
