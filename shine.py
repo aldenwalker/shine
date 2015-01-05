@@ -666,6 +666,19 @@ class ShineEmSurfDisplay:
       return
     
     #if there is a surface, show it
+    boundary_edges = set()
+    acted_on_T = [[self.draw_transformation(x) for x in t] for t in self.shine_parent.ES.em_t]
+    normals = [R3.triangle_normal(t) for t in acted_on_T]
+    #find the boundary edges
+    for ei in xrange(len(self.shine_parent.ES.e)):
+      left_i = self.shine_parent.ES.e[ei].on_left[0]
+      right_i = self.shine_parent.ES.e[ei].on_right[0]
+      left_faces_eye = self.draw_viewer.normal_faces_eye(acted_on_T[left_i][0], normals[left_i])
+      right_faces_eye = self.draw_viewer.normal_faces_eye(acted_on_T[right_i][0], normals[right_i])
+      if left_faces_eye != right_faces_eye:
+        boundary_edges.add(ei)
+
+    #if there is a surface, show it
     acted_on_T = [[self.draw_transformation(x) for x in t] for t in self.shine_parent.ES.em_t]
     pT = self.draw_viewer.project_triangles(acted_on_T)
     outline = ('black' if self.draw_do_mesh.get()==1 else '')
@@ -679,6 +692,19 @@ class ShineEmSurfDisplay:
       #print "Amount: ", rgb
       di = self.canvas.create_polygon(*flat_coord_list, fill=rgb, outline=outline)
       self.drawing_items.append(di)
+      for j in xrange(3):
+        ei = self.shine_parent.ES.t[i].i_edges[j].ind
+        if ei in boundary_edges:
+          v1i = self.shine_parent.ES.e[ei].source
+          v2i = self.shine_parent.ES.e[ei].dest
+          v1_p = self.draw_viewer.project_point(self.draw_transformation(self.shine_parent.ES.em_v[v1i]))
+          v2_p = self.draw_viewer.project_point(self.draw_transformation(self.shine_parent.ES.em_v[v2i]))
+          dv1_p = self.draw_plane_to_canvas(v1_p)
+          dv2_p = self.draw_plane_to_canvas(v2_p)
+          coords = [x for v in [dv1_p,dv2_p] for x in v]
+          di = self.canvas.create_line(*coords, width=5, fill='#123456') 
+          self.drawing_items.append(di)
+          
     # draw the loops
     self.loops_redraw()
     

@@ -1,5 +1,9 @@
 import math
 
+def triangle_normal(L):
+  v1, v2, v3 = L
+  return (v2-v1).cross(v3-v1)
+
 class Vector:
   def __init__(self, L):
     if isinstance(L, int):
@@ -114,6 +118,8 @@ class ProjectionViewer:
         return False
     return True
     
+  def normal_faces_eye(self, pt, v):
+    return v.dot(self.eye-pt) > 0
   
   def project_point(self, pt):
     tp = pt - self.eye
