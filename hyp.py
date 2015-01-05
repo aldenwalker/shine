@@ -156,7 +156,7 @@ class HypGeodesicInterval:
   def act_by_mobius(self, M):
     return HypGeodesicInterval(M(self.start), M(self.end))
   
-  def pt_along(self, t):
+  def pt_along_euclidean(self, t):
     """t in [0,1]; this gives a parameterization"""
     if self.vertical:
       return self.start + t*(self.end - self.start)
@@ -164,6 +164,20 @@ class HypGeodesicInterval:
     cc = self.circ_center
     cr = self.circ_radius
     return complex( cc + cr*math.cos(a), cr*math.sin(a) )
+  
+  def pt_along(self, t):
+    """gives the point a fraction t of the way along (in hyperbolic metric)"""
+    #get the mobius transporting the interval to vertical
+    M = mobius.MobiusTrans.unit_tangent_to_I_vert(self.start, self.initial_angle)
+    #p1 = 0+j #M(self.start)
+    #p2 = M(self.end)
+    total_dist = self.length
+    d = t*total_dist
+    #note the start is at I, with imaginary part 1
+    #the formula for a point distance d up from (0,y1) is:
+    #y1 Cosh[d] + Sqrt[-y1^2 + y1^2 Cosh[d]^2]
+    p = complex(0, math.cosh(d) + math.sqrt(math.cosh(d)**2 - 1))
+    return M.inverse()(p)
   
   def __repr__(self):
     return str(self)
@@ -323,6 +337,11 @@ class EmHypTri(HypTri):
   def from_vertices(cls, em_V):
     GIs = [HypGeodesicInterval(em_V[i], em_V[(i+1)%3]) for i in xrange(3)]
     return cls(GIs)
+  
+  def gi_between_points(self, e1i, e1t, e2i, e2t):
+    p1 = self.sides[e1i].pt_along(e1t)
+    p2 = self.sides[e2i].pt_along(e2t)
+    return HypGeodesicInterval(p1, p2)
   
   def act_by_mobius(self, M):
     return EmHypTri([gi.act_by_mobius(M) for gi in self.sides])

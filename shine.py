@@ -175,7 +175,7 @@ class HypSurfaceVisualizer:
           EL = gi.Euclidean_length()
           num_joints = int(num_joints*EL+1)
         for j in xrange(num_joints):
-          pts.append( gi.pt_along( float(j)/float(num_joints) ) )
+          pts.append( gi.pt_along_euclidean( float(j)/float(num_joints) ) )
       cpts = [self.draw_complex_to_canvas(p) for p in pts]
       cpts = [x for P in cpts for x in P]
       di = self.canvas.create_polygon(*cpts, fill=col)
@@ -476,6 +476,7 @@ class Shine:
   
   def swap_show_lift(self):
     if self.do_show_lift.get() == 1:
+      self.LS = gsurf.LiftedSurface.lift_gsurf(self.GS)
       self.liftedsurf_displayer = ShineHypSurfaceDisplay(self)
       self.liftedsurf_displayer.window.protocol("WM_DELETE_WINDOW", self.kill_lift)
     else:
@@ -497,12 +498,12 @@ class Shine:
       return
     sub_data = self.ES.subdivide()
     self.GS.subdivide()
-    self.LS = gsurf.LiftedSurface.lift_gsurf(self.GS)
     for ell in self.loop_displayer.loops:
       ell.subdivide(*sub_data)
       
     self.emsurf_displayer.canvas_redraw()
     if self.do_show_lift.get() == 1:
+      self.LS = gsurf.LiftedSurface.lift_gsurf(self.GS)
       self.liftedsurf_displayer.canvas_redraw()
   
   def flow(self):
@@ -512,6 +513,8 @@ class Shine:
     self.emsurf_displayer.canvas_redraw()
   
   def export(self):
+    if self.ES == None:
+      return
     dialog = tk.Toplevel(master=self.parent)
     dialog.title('Export')
     parent_location = (self.parent.winfo_rootx(), self.parent.winfo_rooty())
@@ -522,30 +525,65 @@ class Shine:
     export_as = tk.StringVar()
     export_as.set('svg')
     W_export_as_label = tk.Label(dialog, text='Export as:')
-    W_export_svg = tk.RadioButton(dialog, text='svg', variable=export_as, value='svg')
+    W_export_svg = tk.Radiobutton(dialog, text='svg', variable=export_as, value='svg')
     W_surface_option_frame = tk.LabelFrame(dialog, text='Surface options')
-    W_surface_outline
+    surface_outline = tk.IntVar()
+    surface_outline.set(0)
+    
+    def change_surface_style():
+      W_surface_outline_smooth.config(state=(tk.DISABLED if surface_outline.get() == 0 else tk.NORMAL))
+      W_surface_mesh_shading.config(state=(tk.DISABLED if surface_outline.get() == 1 else tk.NORMAL))
+      W_surface_mesh_mesh.config(state=(tk.DISABLED if surface_outline.get() == 1 else tk.NORMAL))
+    
+    W_surface_mesh = tk.Radiobutton(W_surface_option_frame, text='Mesh', variable=surface_outline, value=0, command=change_surface_style)
+    surface_mesh_shading = tk.IntVar()
+    surface_mesh_shading.set(1)
+    W_surface_mesh_shading = tk.Checkbutton(W_surface_option_frame, text='Shading', variable=surface_mesh_shading)
+    surface_mesh_mesh = tk.IntVar()
+    surface_mesh_mesh.set(1)
+    W_surface_mesh_mesh = tk.Checkbutton(W_surface_option_frame, text='Mesh', variable=surface_mesh_mesh)
+    
+    W_surface_outline = tk.Radiobutton(W_surface_option_frame, text='Outline', variable=surface_outline, value=1, command=change_surface_style)
+    surface_outline_smooth = tk.IntVar()
+    surface_outline_smooth.set(1)
+    W_surface_outline_smooth = tk.Checkbutton(W_surface_option_frame, text='Smooth', variable=surface_outline_smooth, state=tk.DISABLED)
+    
+    W_surface_mesh.grid(row=0, column=0, columnspan=2,sticky=tk.W)
+    W_surface_mesh_shading.grid(row=1, column=1, sticky=tk.W, padx=10)
+    W_surface_mesh_mesh.grid(row=2, column=1,sticky=tk.W, padx=10)
+    W_surface_outline.grid(row=3, column=0, columnspan=2,sticky=tk.W)
+    W_surface_outline_smooth.grid(row=4, column=1,sticky=tk.W, padx=10)
+    
     W_loop_option_frame = tk.LabelFrame(dialog, text='Loop options')
+    loop_smooth = tk.IntVar()
+    loop_smooth.set(0)
+    W_loop_smooth = tk.Checkbutton(W_loop_option_frame, text='Smooth', variable=loop_smooth)
     
+    W_loop_smooth.grid(row=0, column=0)
     
+    dialog.rowconfigure(0, weight=1)
+    dialog.columnconfigure(0, weight=1)
+    dialog.columnconfigure(1, weight=1)
     
-    W_word_label = tk.Label(dialog, text='Create a loop as a product:')
-    W_known_loops = tk.Label(dialog, text='Known loops: ' + str([ell for ell in self.shine_parent.ES.loops]) )
-    W_word_input = tk.Entry(dialog)
-    word_input = [None] #making it a list makes it visible to the function set_word
-    def set_word():
-      word_input[0] = W_word_input.get()
+    W_surface_option_frame.grid(row=0, column=0, sticky=tk.N+tk.E+tk.S+tk.W)
+    W_loop_option_frame.grid(row=0, column=1, sticky=tk.N+tk.E+tk.S+tk.W)
+    
+    OK = tk.IntVar()
+    OK.set(0)
+    def ok():
+      OK.set(1)
       dialog.destroy()
-    W_word_go = tk.Button(dialog, text='Add from word', command=set_word )
+    
+    W_OK = tk.Button(dialog, text='OK', command=ok)
     W_cancel = tk.Button(dialog, text='Cancel', command=dialog.destroy)
     
-    W_word_label.grid(column=0, row=0, sticky=tk.W)
-    W_known_loops.grid(column=0, row=1, sticky=tk.W)
-    W_word_input.grid(column=0, row=2, sticky=tk.W)
-    W_word_go.grid(column=0, row=3, sticky=tk.W)
-    W_cancel.grid(column=1, row=3)
+    W_OK.grid(row=1, column=0)
+    W_cancel.grid(row=1, column=1)
     
     dialog.wait_window(dialog)
+    
+    print ("OK" if OK.get()==1 else "Cancel")
+    
 
 ############################################################################
 # subvisualizer based on the embedded surface visualizer
@@ -722,6 +760,8 @@ class ShineLoopDisplay:
     self.add_loop_button.grid(column=0, row=len(self.frames)+1, sticky=tk.W)
     self.loops.append( ShineLoop(self.frames[-1], self, EP, word=word) )
     self.shine_parent.emsurf_displayer.canvas_redraw()
+    if self.shine_parent.liftedsurf_displayer != None:
+      self.shine_parent.liftedsurf_displayer.canvas_redraw()
       
   
   def delete_loop(self, loop_to_delete):
@@ -806,6 +846,9 @@ class ShineLoop:
     self.color = c
     self.W_color.config(bg=self.color)
     self.shine_main.emsurf_displayer.canvas_redraw()
+    if self.shine_main.liftedsurf_displayer != None:
+      self.shine_main.liftedsurf_displayer.canvas_redraw()
+      
   
   def subdivide(self, old_TS, vertices_from_edges, edges_from_edges, edges_from_tris, tris_from_tris):
     self.EP.subdivide(old_TS, vertices_from_edges, edges_from_edges, edges_from_tris, tris_from_tris)
@@ -814,6 +857,8 @@ class ShineLoop:
     #self.EP = self.shine_main.LS.geodesicify(self.EP)
     self.EP = self.shine_main.GS.geodesicify(self.EP)
     self.shine_main.emsurf_displayer.canvas_redraw()
+    if self.shine_main.liftedsurf_displayer != None:
+      self.shine_main.liftedsurf_displayer.canvas_redraw()
     
     
     
@@ -913,6 +958,28 @@ class ShineHypSurfaceDisplay:
       else:
         self.draw_geodesic_segment(e.gi, thickness=2)
     
+    #draw all the lifts of edges
+    for ell in self.shine_parent.loop_displayer.loops:
+      if ell.show.get() == 0:
+        continue
+      lep = len(ell.EP.edges)
+      ES = self.shine_parent.ES
+      for i in xrange(lep):
+        ip1 = (i+1)%lep
+        e1 = ell.EP.edges[i]
+        e1t = (ell.EP.edge_coords[i] if e1.sign>0 else 1-ell.EP.edge_coords[i])
+        e2 = ell.EP.edges[ip1]
+        e2t = (1-ell.EP.edge_coords[ip1] if e2.sign>0 else ell.EP.edge_coords[ip1])
+        ti, e1_in_t = (ES.e[e1.ind].on_left if e1.sign>0 else ES.e[e1.ind].on_right)
+        e2_in_t = (ES.e[e2.ind].on_right if e2.sign>0 else ES.e[e2.ind].on_left)[1]
+        GIs = []
+        for lifted_ti in self.extended_LS.t_lifts[ti]:
+          lifted_t = self.extended_LS.em_t[lifted_ti]
+          GIs.append( lifted_t.t.gi_between_points(e1_in_t, e1t, e2_in_t, e2t) )
+        for gi in GIs:
+          self.draw_geodesic_segment(gi, thickness=3, color=ell.color)
+        
+    
     #draw all the vertices, giving the same color to lifts
     #of the same vertex
     for i,v in enumerate(self.extended_LS.em_v):
@@ -962,14 +1029,14 @@ class ShineHypSurfaceDisplay:
   ##########################################################################
   # draw a geodesic segment (arc of a circle)
   ##########################################################################
-  def draw_geodesic_segment(self, gi, thickness=1):
+  def draw_geodesic_segment(self, gi, thickness=1, color='#000000'):
     trans_gi = gi.act_by_mobius(self.draw_transformation)
     #print "Drawing geodesic segment: ", gi
     #print "After trans: ", trans_gi
     if trans_gi.vertical:
       s = self.draw_complex_to_canvas(trans_gi.start)
       e = self.draw_complex_to_canvas(trans_gi.end)
-      di = self.canvas.create_line(s[0], s[1], e[0], e[1], width=2)
+      di = self.canvas.create_line(s[0], s[1], e[0], e[1], width=2, fill=color)
       self.drawing_items.append(di)
       return
     ma = min(trans_gi.circ_angle1, trans_gi.circ_angle2)
@@ -983,7 +1050,7 @@ class ShineHypSurfaceDisplay:
     rr = self.draw_scale * r
     bbox = (cc[0]-rr, cc[1]-rr, cc[0]+rr, cc[1]+rr)
     bbox = [int(b) for b in bbox]
-    di = self.canvas.create_arc(bbox[0], bbox[1], bbox[2], bbox[3], style=tk.ARC, start=ma, extent=(Ma-ma), width=thickness)
+    di = self.canvas.create_arc(bbox[0], bbox[1], bbox[2], bbox[3], style=tk.ARC, start=ma, extent=(Ma-ma), width=thickness, outline=color)
     #print "Drew arc at ", bbox, " with start, extent", ma, Ma-ma
     self.drawing_items.append(di)
   
@@ -1003,7 +1070,7 @@ class ShineHypSurfaceDisplay:
           EL = gi.Euclidean_length()
           num_joints = int(num_joints*EL+1)
         for j in xrange(num_joints):
-          pts.append( gi.pt_along( float(j)/float(num_joints) ) )
+          pts.append( gi.pt_along_euclidean( float(j)/float(num_joints) ) )
       cpts = [self.draw_complex_to_canvas(p) for p in pts]
       cpts = [x for P in cpts for x in P]
       di = self.canvas.create_polygon(*cpts, fill=col)
