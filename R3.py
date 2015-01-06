@@ -74,6 +74,7 @@ class ProjectionViewer:
     self.right = self.right.scaled_to_len(1.0)
     self.up = self.right.cross(self.towards)
     self.up = self.up.scaled_to_len(1.0)
+    self.viewer_grid = None
   
   def zoom(self, factor):
     self.eye = self.eye + self.unscaled_towards*factor
@@ -152,9 +153,88 @@ class ProjectionViewer:
     """project a list of triangles, sorting them"""
     sorted_T = sorted(T, key=lambda x: ((x[0]+x[1]+x[2])/3.0 -self.eye).norm(), reverse=True)
     return [self.project_triangle(t) for t in sorted_T]
-
-
-
+  
+  def visible_segment(self, segment, T):
+    """returns a list of 3d segments which remains after cutting with all 
+    the triangles in T"""
+    
+  
+  
+  
+  def viewer_grid_init_triangles(self, T):
+    T_projected = [map(self.project_point, t) for t in T]
+    box_ll = T_projected[0][0]
+    box_ur = T_projected[0][0]
+    max_segment_height = 0
+    max_segment_width = 0
+    for tp in T_projected:
+      for i in xrange(3):
+        slx = tp[(i+1)%3][0] - tp[i][0]
+        sly = tp[(i+1)%3][1] - tp[i][1]
+        if slx > max_segment_width:
+          max_segment_width = slx
+        if sly > max_segment_height:
+          max_segment_height = sly
+        tv = tp[i]
+        if tv[0] < box_ll[0]:
+          box_ll[0] = tv[0]
+        elif tv[0] > box_ur[0]:
+          box_ur[0] = tv[0]
+        if tv[1] < box_ll[1]:
+          box_ll[1] = tv[1]
+        elif tv[1] > box_ur[1]:
+          box_ur[1] = tv[1]
+    self.viewer_grid_ll = box_ll
+    self.viewer_grid_height = box_ur[1] - box_ll[1]
+    self.viewer_grid_ur = box_ur
+    self.viewer_grid_width = box_ur[0] - box_ll[0]
+    self.viewer_grid_num_horiz_boxes = int( self.viewer_grid_width/max_segment_width )
+    self.viewer_grid_num_vert_boxes = int( self.viewer_grid_height/max_segment_height )
+    self.viwer_grid_box_width = self.viewer_grid_width / self.viewer_grid_num_horiz_boxes
+    self.viewer_grid_box_height = self.viewer_grid_height / self.viewer_grid_num_vert_boxes
+    self.viewer_grid_grid = [ [ [[],[]] for y in xrange(self.viewer_grid_num_vert_boxes)] \
+                                        for x in xrange(self.viewer_grid_num_horiz_boxes) ]
+    for i,t in enumerate(T_projected):
+      self.viewer_grid_add_projected_triangle(t, i)
+  
+  def viewer_grid_near_segment(self, s):
+    grid_indices = self.viewer_grid_projected_segment_indices( map(self.project_point, s) )
+    nearby_triangles = []
+    nearby_segments = []
+    for i,j in grid_indices:
+      nearby_triangles.extend(self.viewer_grid_grid[i][j][0])
+      nearby_segments.extend(self.viewer_grid_grid[i][j][1])
+    return nearby_triangles, nearby_segments
+  
+  def viewer_grid_add_segment(self, s, ind):
+    grid_indices = self.viewer_grid_projected_segment_indices( map(self.project_point, s) )
+    for i,j in grid_indices:
+      self.viewer_grid_grid[i][j][1].append(ind)
+  
+  def viewer_grid_add_projected_triangle(self, t, ind):
+    grid_indices = self.viewer_grid_projected_triangle_indices( t )
+    for i,j in grid_indices:
+      self.viewer_grid_grid[i][j][0].append(ind)
+  
+  def viewer_grid_projected_point_indices(self, pt):
+    return (pt[0] - self.viewer_grid_ll[0]) / self.viewer_grid_box_width, \
+           (pt[1] - self.viewer_grid_ll[1]) / self.viewer_grid_box_height
+  
+  def viewer_grid_projected_segment_indices(self, s):
+    I1 = self.viewer_grid_projected_point_indices(s[0])
+    I2 = self.viewer_grid_projected_point_indices(s[1])
+    return [ (i,j) for i in xrange(min(I1[0], I2[0]), max(I1[0],I2[0])+1) \
+                   for j in xrange(min(I1[1], I2[1]), max(I1[1],I2[1])+1) ]
+  
+  def viewer_grid_projected_triangle_indices(self, t):
+    I1 = self.viewer_grid_projected_point_indices(s[0])
+    I2 = self.viewer_grid_projected_point_indices(s[1])
+    I3 = self.viewer_grid_projected_point_indices(s[1])
+    return [ (i,j) for i in xrange(min(I1[0],I2[0],I3[0]), max(I1[0],I2[0],I3[0])+1) \
+                   for j in xrange(min(I1[1],I2[1],I3[1]), max(I1[1],I2[1],I3[1])+1) ]
+  
+    
+    
 
 
 

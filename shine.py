@@ -3,7 +3,6 @@ import tsurf
 import gsurf
 import emsurf
 import mobius
-import R2
 import R3
 
 import math
@@ -667,39 +666,38 @@ class ShineEmSurfDisplay:
       return
     
     #act on everything
-    visible_boundary_edges = set()
-    visible_boundary_segments = dict()
-    acted_on_T = [[self.draw_transformation(x) for x in t] for t in self.shine_parent.ES.em_t]
-    normals = [R3.triangle_normal(t) for t in acted_on_T]
-    t_faces_eye = [self.draw_viewer.faces_eye(t[0], normals[i]) for i,t in enumerate(acted_on_T)]
-    visible_T = [t for i,t in enumerate(acted_on_T) if t_faces_eye[i]]
-    sorted_projected_T = self.draw_viewer.project_triangles(visible_T)
-    num_sorted = len(sorted_projected_T)
-    sorted_projected_amounts = num_sorted*[None]
-    for i in xrange(num_sorted):
-      sorted_projected_T[i], sorted_projected_amounts[i] = sorted_projected_T[i]
-      sorted_projected_T[i] = [R2.Vector(x) for x in sorted_projected_T[i]]
+    T_acted_on = [[self.draw_transformation(x) for x in t] for t in self.shine_parent.ES.em_t]
+    T_normals = [R3.triangle_normal(t) for t in acted_on_T]
+    T_visible = [self.draw_viewer.faces_eye(t[0], normals[i]) for i,t in enumerate(acted_on_T)]
+    T_visible_only = [T_acted_on[i] for i in xrange(len(T_visible)) if T_visible[i]]
+    T_sorted_projected = self.draw_viewer.project_triangles(T_visible_only)
+    self.draw_viewer.viewer_grid_init_triangles(T_visible_only)
     
-    #find the boundary edges
-    # for ei in xrange(len(self.shine_parent.ES.e)):
-#       left_i, left_i_in_t = self.shine_parent.ES.e[ei].on_left
-#       right_i, right_i_in_t = self.shine_parent.ES.e[ei].on_right
-#       left_faces_eye = t_faces_eye[left_i]
-#       right_faces_eye = t_faces_eye[right_i]
-#       if left_faces_eye == right_faces_eye:
-#         continue
-#       visible_boundary_edges.add(ei)
-#       #now we need to find the portion which is uncovered
-#       segment = [ acted_on_T[left_i][left_i_in_t], acted_on_T[left_i][(left_i_in_t+1)%3] ]
-#       projected_segment = [R2.Vector(self.draw_viewer.project_point(x)) for x in segment]
-#       visible_projected_segment = R2.visible_subsegment(projected_segment, sorted_projected_T)
-#       if visible_projected_segment != None:
-#         visible_boundary_segments[ei] = visible_projected_segment[0]
-    
+    #find the edges which lie on the visible boundary
+    #(even the hidden ones)
+    edges_on_boundary = dict()
+    visible_segments = []
+    for ei in xrange(len(self.shine_parent.ES.e)):
+      left_i, left_i_in_t = self.shine_parent.ES.e[ei].on_left
+      right_i, right_i_in_t = self.shine_parent.ES.e[ei].on_right
+      left_faces_eye = T_visible[left_i]
+      right_faces_eye = T_visible[right_i]
+      if left_faces_eye == right_faces_eye:
+        continue
+      #now find the visible part
+      segment = [ acted_on_T[left_i][left_i_in_t], acted_on_T[left_i][(left_i_in_t+1)%3] ]
+      Ti_near_segment, unused_nearby_segments = self.draw_viewer.viewer_grid_near_segment(segment)
+      visible_segment = self.draw_viewer.visible_segment(segment, [T_visible_only[i] for i in Ti_near_segment])
+      if visible_segment == None:
+        continue
+      edges_on_boundary[ei] = len(visible_segments)
+      self.draw_viewer.viewer_grid_add_segment(visible_segment, len(visible_segments))
+      visible_segments.append(visible_segment)
+
     # draw all the triangles
     outline = ('black' if self.draw_do_mesh.get()==1 else '')
     for i in xrange(num_sorted):
-      pt, am = sorted_projected_T[i], sorted_projected_amounts[i]
+      pt, am = T_sorted_projected[i]
       canvas_coords = [self.draw_plane_to_canvas(x) for x in pt]
       flat_coord_list = [x for p in canvas_coords for x in p]
       grayscale = int(128*(am+1))
@@ -710,13 +708,14 @@ class ShineEmSurfDisplay:
       self.drawing_items.append(di)
     
     #draw the boundary
-#     for ei in visible_boundary_segments:
-#       v1, v2 = visible_boundary_segments[ei]
-#       dv1 = self.draw_plane_to_canvas(v1)
-#       dv2 = self.draw_plane_to_canvas(v2)
-#       coords = [x for v in [dv1,dv2] for x in v]
-#       di = self.canvas.create_line(*coords, width=5, fill='#123456') 
-#       self.drawing_items.append(di)
+    for ei in visible_segments:
+      v1, v2 = visible_segments[ei]
+      v1p, v2p = map(self.draw_viewer.project_point, [v1, v2])
+      dv1 = self.draw_plane_to_canvas(v1p)
+      dv2 = self.draw_plane_to_canvas(v2p)
+      coords = [x for v in [dv1,dv2] for x in v]
+      di = self.canvas.create_line(*coords, width=3, fill='#FF0000') 
+      self.drawing_items.append(di)
           
     #draw the loops
     for ell in self.shine_parent.loop_displayer.loops:
