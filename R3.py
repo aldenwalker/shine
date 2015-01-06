@@ -92,6 +92,10 @@ class ProjectionViewer:
     #print "No, it's not hidden"
     return False
   
+  def uncovered_segment(self, segment, t):
+    """return the segment which is uncovered by the triangle t"""
+    
+  
   def triangle_hides_point(self, t, p):
     #zoom until we hit the plane containing the triangle
     #print "\nChecking if ", t, "covers", p
@@ -118,7 +122,7 @@ class ProjectionViewer:
         return False
     return True
     
-  def normal_faces_eye(self, pt, v):
+  def faces_eye(self, pt, v):
     return v.dot(self.eye-pt) > 0
   
   def project_point(self, pt):
