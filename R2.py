@@ -105,8 +105,43 @@ def cut_segment_with_triangle(s, t):
   #print I
   return [[s[0], along_segment(s, I[0][0])],[along_segment(s, I[1][0]), s[1]]]
   
-  
-  
+#the same except it returns fractions
+def cut_segment_with_triangle_t_values(s, t):
+  diffs = [t[(i+1)%3]-t[i] for i in xrange(3)]
+  ws = [ [diffs[i].cross(s[j]-t[i]) > 1e-8 for i in xrange(3)] for j in xrange(2)]
+  if (not ws[0][0] and not ws[1][0]) or (not ws[0][1] and not ws[1][1]) or (not ws[0][2] and not ws[1][2]):
+    return [[0.0,1.0]]
+  if all(ws[0]):
+    for i in xrange(3):
+      if not ws[1][i]:
+        I = intersect_segments(s, [t[i], t[(i+1)%3]])
+        if I != None:
+          if I < 1-1e-10:
+            return [[I[0], 1.0]]
+          else:
+            return None
+    #print "all in"
+    return None
+  if all(ws[1]):
+    for i in xrange(3):
+      if not ws[0][i]:
+        I = intersect_segments(s, [t[i], t[(i+1)%3]])
+        if I != None:
+          if I[0] > 1e-10:
+            return [[0.0, I[0]]]
+          else:
+            return None
+    #print "all in"
+    return None
+  I = [intersect_segments(s, [t[i], t[(i+1)%3]]) for i in xrange(3)]
+  I = [i for i in I if i != None]
+  if len(I) < 2:
+    return [[0.0,1.0]]
+  I.sort()
+  #print I
+  if I[1][0] - I[0][0] < 1e-10:
+    return None
+  return [ [0.0, I[0][0]], [I[1][0], 1.0] ]
 
 
 

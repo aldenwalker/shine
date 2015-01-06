@@ -1,8 +1,12 @@
 import math
+import R2
 
 def triangle_normal(L):
   v1, v2, v3 = L
   return (v2-v1).cross(v3-v1)
+
+def along_segment(s, t):
+  return s[0]*(1-t) + s[1]*t
 
 class Vector:
   def __init__(self, L):
@@ -92,11 +96,7 @@ class ProjectionViewer:
         return True
     #print "No, it's not hidden"
     return False
-  
-  def uncovered_segment(self, segment, t):
-    """return the segment which is uncovered by the triangle t"""
     
-  
   def triangle_hides_point(self, t, p):
     #zoom until we hit the plane containing the triangle
     #print "\nChecking if ", t, "covers", p
@@ -154,17 +154,40 @@ class ProjectionViewer:
     sorted_T = sorted(T, key=lambda x: ((x[0]+x[1]+x[2])/3.0 -self.eye).norm(), reverse=True)
     return [self.project_triangle(t) for t in sorted_T]
   
-  def visible_segment(self, segment, T):
+  def visible_subsegments(self, segment, T):
     """returns a list of 3d segments which remains after cutting with all 
     the triangles in T"""
-    
-  
-  
+    s = [segment]
+    print "Cutting ", s
+    for t in T:
+      print "With ", t
+      n = (t[1]-t[0]).cross(t[2]-t[0])
+      #if (self.eye - t[0]).dot(n) <= 0:
+      #  continue
+      t_projected = [R2.Vector(self.project_point(v)) for v in t]
+      new_segments = []
+      for seg in s:
+        print "Cutting subsegment", seg
+        if (seg[0]-t[0]).dot(n) >= 0 and (seg[1]-t[0]).dot(n) >= 0:
+          new_segments.append(seg)
+          continue
+        seg_projected = [R2.Vector(self.project_point(v)) for v in seg]
+        seg_projected_cut = R2.cut_segment_with_triangle_t_values(seg_projected, t_projected)
+        print "Got ", seg_projected_cut
+        if seg_projected_cut == None:
+          continue
+        new_segments.extend( [ [along_segment(seg, spc[0]), along_segment(seg, spc[1])] for spc in seg_projected_cut] )
+      s = new_segments
+      print "Current s:", s
+      if len(s) == 0:
+        return None
+    return s
+
   
   def viewer_grid_init_triangles(self, T):
     T_projected = [map(self.project_point, t) for t in T]
-    box_ll = T_projected[0][0]
-    box_ur = T_projected[0][0]
+    box_ll = list(T_projected[0][0])
+    box_ur = list(T_projected[0][0])
     max_segment_height = 0
     max_segment_width = 0
     for tp in T_projected:
@@ -190,10 +213,11 @@ class ProjectionViewer:
     self.viewer_grid_width = box_ur[0] - box_ll[0]
     self.viewer_grid_num_horiz_boxes = int( self.viewer_grid_width/max_segment_width )
     self.viewer_grid_num_vert_boxes = int( self.viewer_grid_height/max_segment_height )
-    self.viwer_grid_box_width = self.viewer_grid_width / self.viewer_grid_num_horiz_boxes
+    self.viewer_grid_box_width = self.viewer_grid_width / self.viewer_grid_num_horiz_boxes
     self.viewer_grid_box_height = self.viewer_grid_height / self.viewer_grid_num_vert_boxes
     self.viewer_grid_grid = [ [ [[],[]] for y in xrange(self.viewer_grid_num_vert_boxes)] \
                                         for x in xrange(self.viewer_grid_num_horiz_boxes) ]
+    print "made grid:", self.viewer_grid_num_horiz_boxes, self.viewer_grid_num_vert_boxes, self.viewer_grid_box_width, self.viewer_grid_box_height, self.viewer_grid_ll, self.viewer_grid_ur
     for i,t in enumerate(T_projected):
       self.viewer_grid_add_projected_triangle(t, i)
   
@@ -213,12 +237,13 @@ class ProjectionViewer:
   
   def viewer_grid_add_projected_triangle(self, t, ind):
     grid_indices = self.viewer_grid_projected_triangle_indices( t )
+    print "Adding triangle -- got grid indices: ", grid_indices
     for i,j in grid_indices:
       self.viewer_grid_grid[i][j][0].append(ind)
   
   def viewer_grid_projected_point_indices(self, pt):
-    return (pt[0] - self.viewer_grid_ll[0]) / self.viewer_grid_box_width, \
-           (pt[1] - self.viewer_grid_ll[1]) / self.viewer_grid_box_height
+    return int( (pt[0] - self.viewer_grid_ll[0] - 1e-12) / self.viewer_grid_box_width  ), \
+           int( (pt[1] - self.viewer_grid_ll[1] - 1e-12) / self.viewer_grid_box_height )
   
   def viewer_grid_projected_segment_indices(self, s):
     I1 = self.viewer_grid_projected_point_indices(s[0])
@@ -227,9 +252,9 @@ class ProjectionViewer:
                    for j in xrange(min(I1[1], I2[1]), max(I1[1],I2[1])+1) ]
   
   def viewer_grid_projected_triangle_indices(self, t):
-    I1 = self.viewer_grid_projected_point_indices(s[0])
-    I2 = self.viewer_grid_projected_point_indices(s[1])
-    I3 = self.viewer_grid_projected_point_indices(s[1])
+    I1 = self.viewer_grid_projected_point_indices(t[0])
+    I2 = self.viewer_grid_projected_point_indices(t[1])
+    I3 = self.viewer_grid_projected_point_indices(t[1])
     return [ (i,j) for i in xrange(min(I1[0],I2[0],I3[0]), max(I1[0],I2[0],I3[0])+1) \
                    for j in xrange(min(I1[1],I2[1],I3[1]), max(I1[1],I2[1],I3[1])+1) ]
   
