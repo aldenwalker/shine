@@ -164,8 +164,8 @@ class ProjectionViewer:
     hyp_n = [-(t[1]-t[0]).cross(t[2]-t[0])]
     hyp_pt.extend( [t[i] for i in xrange(3)] )
     hyp_n.extend( [(self.eye-t[i]).cross(t[(i+1)%3]-t[i]) for i in xrange(3)] )
-    inclusions_dots = [ [ (s-hyp_pt[i]).dot(hyp_n[i]) for i in xrange(4)] for s in segment ]
-    inclusions = 
+    inclusion_dots = [ [ (s-hyp_pt[i]).dot(hyp_n[i]) for i in xrange(4)] for s in segment ]
+    inclusions = [ [d>0 for d in sd] for sd in inclusion_dots]
     #print "Inclusions: ", inclusions
     all_in_0 = all(inclusions[0])
     all_in_1 = all(inclusions[1])
@@ -177,6 +177,9 @@ class ProjectionViewer:
         return [[0.0,1.0]]
       if inclusions[0][i] != inclusions[1][i]:
         pierce_t = segment_intersect_plane_t_value(segment, hyp_pt[i], hyp_n[i])
+        if pierce_t == None:
+          print segment, inclusion_dots, i
+          raise ValueError("didn't pierce plane?")
         pierce_point = along_segment(segment, pierce_t)
         if all( [ (pierce_point-hyp_pt[j]).dot(hyp_n[j]) >= -1e-10 for j in xrange(4)] ):
           t_values.append(pierce_t) 
