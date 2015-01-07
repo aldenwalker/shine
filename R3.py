@@ -108,30 +108,12 @@ class ProjectionViewer:
     return False
     
   def triangle_hides_point(self, t, p):
-    #zoom until we hit the plane containing the triangle
-    #print "\nChecking if ", t, "covers", p
-    n = (t[1]-t[0]).cross( t[2]-t[0] )
-    x = t[0]
-    e = self.eye
-    d = p - e
-    ddn = d.dot(n)
-    if abs(ddn) < 1e-6:
-      return False
-    alpha = (x-e).dot(n) / ddn
-    #print "Got ", n, x, e, d, ddn, alpha
-    if alpha >= 1.0-1e-6:
-      #if the point is closer than the plane, then it can't be hidden
-      #print "Point is closer; can't be hidden"
-      return False
-    p_in_plane = e + d*alpha
-    #check if the point lies on the correct side of the three triangle sides
-    for i in xrange(3):
-      v = p_in_plane - t[i]
-      c = (t[(i+1)%3] - t[i]).cross(v)
-      #print "Checking against hyperplane", i, "got", v, c, c.dot(n)
-      if c.dot(n) < -1e-4:
-        return False
-    return True
+    hyp_pt = [t[0]]
+    hyp_n = [-(t[1]-t[0]).cross(t[2]-t[0])]
+    hyp_pt.extend( [t[i] for i in xrange(3)] )
+    hyp_n.extend( [(self.eye-t[i]).cross(t[(i+1)%3]-t[i]) for i in xrange(3)] )
+    inclusions = [ [ (p-hyp_pt[i]).dot(hyp_n[i]) > 1e-10 for i in xrange(4)] for s in segment ]
+    return all(inclusions)
     
   def faces_eye(self, pt, v):
     return v.dot(self.eye-pt) > 0
@@ -191,7 +173,7 @@ class ProjectionViewer:
     if len(t_values)==0:
       return [[0.0,1.0]]
     t_values.sort()
-    print "t values:", t_values
+    #print "t values:", t_values
     #remove duplicate t values
     i=0
     while i<len(t_values)-1:
@@ -199,26 +181,40 @@ class ProjectionViewer:
         del t_values[i+1]
       else:
         i+=1
-    print "return t values:", t_values
+    #print "return t values:", t_values
     #there's only a few possibilities
     if len(t_values) == 1:
       if all_in_0:
+        if abs(1-t_values[0]) < 1e-10:
+          return None
         return [ [t_values[0], 1.0] ]
       elif all_in_1:
+        if abs(t_values[0]) < 1e-10:
+          return None
         return [ [0.0, t_values[0]] ]
       else:
         print "Wrong number of intersections?"
+        raise ValueError("Wrong number of intersections?")
     elif len(t_values) == 2:
+      zerot1 = t_values[0] < 1e-10
+      onet2 = abs(1-t_values[1]) < 1e-10
+      if zerot1 and onet2:
+        return None
+      elif zerot1:
+        return [ [t_values[1], 1.0] ]
+      elif onet2:
+        return [ [0.0, t_values[0]] ]
       return [ [0.0, t_values[0]], [t_values[1], 1.0] ]
     else:
       print "Wrong number of intersections?"
+      raise ValueError("Wrong number of intersections?")
     return None
   
   def visible_subsegments(self, segment, T):
     """returns a list of 3d segments which remain after cutting with all 
     the triangles in T"""
     segs = [segment]
-    print "Cutting ", segs
+    #print "Cutting ", segs
     for t in T:
       #print "With ", t
       new_segments = []
@@ -229,10 +225,10 @@ class ProjectionViewer:
           continue
         new_segments.extend( [ [along_segment(s, sc[0]), along_segment(s, sc[1])] for sc in s_cut] )
       segs = new_segments
-      print "Current segs:", segs
+      #print "Current segs:", segs
       if len(segs) == 0:
         return None
-    print "Returning ", segs
+    #print "Returning ", segs
     return segs
 
   
@@ -282,6 +278,10 @@ class ProjectionViewer:
       nearby_triangles.update(self.viewer_grid_grid[i][j][0])
       nearby_segments.update(self.viewer_grid_grid[i][j][1])
     return nearby_triangles, nearby_segments
+  
+  def vewier_grid_near_point(self, pt):
+    grid_index = self.viewer_grid_projected_point_indices( self.project_point(pt) )
+    return self.viewer_grid_grid[grid_index[0]][grid_index[1]]
   
   def viewer_grid_add_segment(self, s, ind):
     grid_indices = self.viewer_grid_projected_segment_indices( map(self.project_point, s) )

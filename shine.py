@@ -22,6 +22,14 @@ def clamp(x):
     return 255
   return x
 
+def whiten_color(col):
+  """make a color string more white"""
+  c1 = int(col[1:3], 16)
+  c2 = int(col[3:5], 16)
+  c3 = int(col[5:7], 16)
+  c1 = 
+  
+
 def arc_disjoint_from_box(cc, cr, ca1, ca2, br, bh ) :
   """is the circular arc at center cc, radius cr, between angles ca1, ca2
   disjoint from the box with bottom center at 0, horiz radius br, and 
@@ -741,22 +749,79 @@ class ShineEmSurfDisplay:
         self.drawing_items.append(di)
     
     #draw the loops
-    for ell in self.shine_parent.loop_displayer.loops:
+    visible_loop_segments = []
+    hidden_loop_segments = []
+    for elli, ell in enumerate(self.shine_parent.loop_displayer.loops):
       if ell.show.get() == 0:
         continue
+      shown_loop_segments.append([elli, []])
+      hidden_loop_segments.append([elli, []])
+      #figure out if the 0th edge starts hidden
       V = [self.shine_parent.ES.along_edge(ell.EP.edges[i].ind, ell.EP.edge_coords[i]) for i in xrange(len(ell.EP.edges))]
       V = [self.draw_transformation(v) for v in V]
-      for i in xrange(len(V)):
-        v1 = V[i]
-        v2 = V[(i+1)%len(V)]
-        segment = [self.draw_viewer.project_point(v1), self.draw_viewer.project_point(v2)]
-        dv1, dv2 = map(self.draw_plane_to_canvas, segment)
-        coords = [x for v in [dv1,dv2] for x in v]
-        line_color = ell.color #('#888888' if hidden else '#000000')
-        di = [ self.canvas.create_line(*coords, width=3, fill=line_color) ] #, \
-               #self.canvas.create_oval(coords[0]-2, coords[1]-2, coords[0]+2, coords[1]+2, fill=point_color), \
-               #self.canvas.create_oval(coords[2]-2, coords[3]-2, coords[2]+2, coords[3]+2, fill=point_color) ]
-        self.drawing_items.extend(di)
+      nearby_Ti, unused_segments = self.draw_viewer.viewer_grid_near_point(V[0])
+      currently_hidden = False
+      for j in nearby_Ti:
+        if self.draw_viewer.triangle_hides_point(T_visible_only[j], V[0]):
+          current_hidden = True
+          break
+      #draw the edges    
+      lep = len(ell.EP.edges)
+      for i,ei in enumerate(ell.EP.edges):
+        seg =  [V[i], V[(i+1)%lep]] 
+        #figure out if it crosses any (projected) boundary edge
+        unused_Ti, nearby_bd_segments = self.draw_viewer.viewer_grid_near_segment( seg )
+        t_values = []
+        for j in nearby_bd_segments:
+          t = self.draw_viewer.segments_cross_t_value(visible_segments[j], seg)
+          if t == None:
+            continue
+          t_values.append(t)
+        if len(t_values)==0:
+          #draw the whole segment
+          seg_list = (hidden_loop_segments[-1][-1] if currently_hidden else shown_loop_segments[-1][-1])
+          seg_list.append(seg)
+          continue
+        t_values.sort()
+        t_values = remove_duplicate_floats(t_values)
+        swap_at_one = False
+        if t_values[0] < 1e-10:
+          del t_values[0]
+        if abs(1-t_values[-1]) < 1e-10:
+          swap_at_1 = True
+          del t_values[-1]
+        current_t = 0
+        for t in t_values:
+          subseg = [ R3.along_segment(seg, current_t), R3.along_segment(seg, t) ]
+          seg_list = (hidden_loop_segments[-1][-1] if currently_hidden else shown_loop_segments[-1][-1])
+          seg_list.append(subseg)
+          current_t = t
+          currently_hidden = not currently_hidden
+        subseg = [R3.along_segment(seg, current_t), R3.along_segment(seg, 1.0)]
+        seg_list = (hidden_loop_segments[-1][-1] if currently_hidden else shown_loop_segments[-1][-1])
+        seg_list.append(subseg)
+        if swap_at_one:
+          currently_hidden = not currently_hidden
+    ### done finding the segments for the loops
+    #now actually draw them
+    for elli, segs in hidden_loop_segments:
+      col = whiten_color(self.shine_parent.loop_displayer.loops[elli].color)
+      for s in segs:
+        cp = [self.draw_plane_to_canvas(self.draw_viewer.project_point(s[0])), \
+              self.draw_plane_to_canvas(self.draw_viewer.project_point(s[1]))]
+        coords = [x for v in cp for x in v]
+        di = self.canvas.create_line(*coords, width=3, fill=col)
+        self.drawing_items.append(di)
+    for elli, segs in shown_loop_segments:
+      col = self.shine_parent.loop_displayer.loops[elli].color
+      for s in segs:
+        cp = [self.draw_plane_to_canvas(self.draw_viewer.project_point(s[0])), \
+              self.draw_plane_to_canvas(self.draw_viewer.project_point(s[1]))]
+        coords = [x for v in cp for x in v]
+        di = self.canvas.create_line(*coords, width=3, fill=col)
+        self.drawing_items.append(di)
+  
+  ##############################end of canvas_redraw
 
   def rotate(self, dir):
     if dir == 'vert_ccw' or dir == 'vert_cw':
