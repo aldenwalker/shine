@@ -8,12 +8,22 @@ def triangle_normal(L):
 def along_segment(s, t):
   return s[0]*(1-t) + s[1]*t
 
+def segment_intersect_plane_t_value(s, pt, n):
+  d = s[1] - s[0]
+  dn = d.dot(n)
+  if abs(dn) < 1e-8:
+    return None
+  return (pt.dot(n) - s[0].dot(n)) / dn
+
 class Vector:
   def __init__(self, L):
     if isinstance(L, int):
       self.x = L*[0]
     elif isinstance(L, list) or isinstance(L, tuple):
       self.x = [i for i in L]
+  
+  def __neg__(self):
+    return Vector([-v for v in self.x])
   
   def __sub__(self, other):
     return Vector([self.x[i]-other.x[i] for i in xrange(len(self.x))])
@@ -148,40 +158,82 @@ class ProjectionViewer:
     amount_from_lights = [tnorm.dot(x) for x in to_lights]
     amount = max(amount_from_lights)
     return (points, amount)
-    
-  def project_triangles(self, T):
-    """project a list of triangles, sorting them"""
+  
+  def sort_triangles(self, T):
     sorted_T = sorted(T, key=lambda x: ((x[0]+x[1]+x[2])/3.0 -self.eye).norm(), reverse=True)
-    return [self.project_triangle(t) for t in sorted_T]
+    return sorted_T
+  
+  def project_triangles(self, T):
+    """project a list of triangles, *not* sorting them"""
+    #sorted_T = sorted(T, key=lambda x: ((x[0]+x[1]+x[2])/3.0 -self.eye).norm(), reverse=True)
+    return [self.project_triangle(t) for t in T]
+  
+  def visible_subsegments_one_triangle_t_values(self, segment, t):
+    hyp_pt = [t[0]]
+    hyp_n = [-(t[1]-t[0]).cross(t[2]-t[0])]
+    hyp_pt.extend( [t[i] for i in xrange(3)] )
+    hyp_n.extend( [(self.eye-t[i]).cross(t[(i+1)%3]-t[i]) for i in xrange(3)] )
+    inclusions = [ [ (s-hyp_pt[i]).dot(hyp_n[i]) > 1e-10 for i in xrange(4)] for s in segment ]
+    #print "Inclusions: ", inclusions
+    all_in_0 = all(inclusions[0])
+    all_in_1 = all(inclusions[1])
+    if all_in_0 and all_in_1:
+      return None
+    t_values = []
+    for i in xrange(4):
+      if not inclusions[0][i] and not inclusions[1][i]:
+        return [[0.0,1.0]]
+      if inclusions[0][i] != inclusions[1][i]:
+        pierce_t = segment_intersect_plane_t_value(segment, hyp_pt[i], hyp_n[i])
+        pierce_point = along_segment(segment, pierce_t)
+        if all( [ (pierce_point-hyp_pt[j]).dot(hyp_n[j]) >= -1e-10 for j in xrange(4)] ):
+          t_values.append(pierce_t) 
+    if len(t_values)==0:
+      return [[0.0,1.0]]
+    t_values.sort()
+    print "t values:", t_values
+    #remove duplicate t values
+    i=0
+    while i<len(t_values)-1:
+      if t_values[i+1]-t_values[i] < 1e-8:
+        del t_values[i+1]
+      else:
+        i+=1
+    print "return t values:", t_values
+    #there's only a few possibilities
+    if len(t_values) == 1:
+      if all_in_0:
+        return [ [t_values[0], 1.0] ]
+      elif all_in_1:
+        return [ [0.0, t_values[0]] ]
+      else:
+        print "Wrong number of intersections?"
+    elif len(t_values) == 2:
+      return [ [0.0, t_values[0]], [t_values[1], 1.0] ]
+    else:
+      print "Wrong number of intersections?"
+    return None
   
   def visible_subsegments(self, segment, T):
-    """returns a list of 3d segments which remains after cutting with all 
+    """returns a list of 3d segments which remain after cutting with all 
     the triangles in T"""
-    s = [segment]
-    print "Cutting ", s
+    segs = [segment]
+    print "Cutting ", segs
     for t in T:
-      print "With ", t
-      n = (t[1]-t[0]).cross(t[2]-t[0])
-      #if (self.eye - t[0]).dot(n) <= 0:
-      #  continue
-      t_projected = [R2.Vector(self.project_point(v)) for v in t]
+      #print "With ", t
       new_segments = []
-      for seg in s:
-        print "Cutting subsegment", seg
-        if (seg[0]-t[0]).dot(n) >= 0 and (seg[1]-t[0]).dot(n) >= 0:
-          new_segments.append(seg)
+      for s in segs:
+        s_cut = self.visible_subsegments_one_triangle_t_values(s, t)
+        #print "Got ", s_cut
+        if s_cut == None:
           continue
-        seg_projected = [R2.Vector(self.project_point(v)) for v in seg]
-        seg_projected_cut = R2.cut_segment_with_triangle_t_values(seg_projected, t_projected)
-        print "Got ", seg_projected_cut
-        if seg_projected_cut == None:
-          continue
-        new_segments.extend( [ [along_segment(seg, spc[0]), along_segment(seg, spc[1])] for spc in seg_projected_cut] )
-      s = new_segments
-      print "Current s:", s
-      if len(s) == 0:
+        new_segments.extend( [ [along_segment(s, sc[0]), along_segment(s, sc[1])] for sc in s_cut] )
+      segs = new_segments
+      print "Current segs:", segs
+      if len(segs) == 0:
         return None
-    return s
+    print "Returning ", segs
+    return segs
 
   
   def viewer_grid_init_triangles(self, T):
@@ -215,31 +267,32 @@ class ProjectionViewer:
     self.viewer_grid_num_vert_boxes = int( self.viewer_grid_height/max_segment_height )
     self.viewer_grid_box_width = self.viewer_grid_width / self.viewer_grid_num_horiz_boxes
     self.viewer_grid_box_height = self.viewer_grid_height / self.viewer_grid_num_vert_boxes
-    self.viewer_grid_grid = [ [ [[],[]] for y in xrange(self.viewer_grid_num_vert_boxes)] \
+    self.viewer_grid_grid = [ [ [set(),set()] for y in xrange(self.viewer_grid_num_vert_boxes)] \
                                         for x in xrange(self.viewer_grid_num_horiz_boxes) ]
-    print "made grid:", self.viewer_grid_num_horiz_boxes, self.viewer_grid_num_vert_boxes, self.viewer_grid_box_width, self.viewer_grid_box_height, self.viewer_grid_ll, self.viewer_grid_ur
+    #print "made grid:", self.viewer_grid_num_horiz_boxes, self.viewer_grid_num_vert_boxes, self.viewer_grid_box_width, self.viewer_grid_box_height, self.viewer_grid_ll, self.viewer_grid_ur
     for i,t in enumerate(T_projected):
       self.viewer_grid_add_projected_triangle(t, i)
+    #print "Grid:", self.viewer_grid_grid
   
   def viewer_grid_near_segment(self, s):
     grid_indices = self.viewer_grid_projected_segment_indices( map(self.project_point, s) )
-    nearby_triangles = []
-    nearby_segments = []
+    nearby_triangles = set()
+    nearby_segments = set()
     for i,j in grid_indices:
-      nearby_triangles.extend(self.viewer_grid_grid[i][j][0])
-      nearby_segments.extend(self.viewer_grid_grid[i][j][1])
+      nearby_triangles.update(self.viewer_grid_grid[i][j][0])
+      nearby_segments.update(self.viewer_grid_grid[i][j][1])
     return nearby_triangles, nearby_segments
   
   def viewer_grid_add_segment(self, s, ind):
     grid_indices = self.viewer_grid_projected_segment_indices( map(self.project_point, s) )
     for i,j in grid_indices:
-      self.viewer_grid_grid[i][j][1].append(ind)
+      self.viewer_grid_grid[i][j][1].add(ind)
   
   def viewer_grid_add_projected_triangle(self, t, ind):
     grid_indices = self.viewer_grid_projected_triangle_indices( t )
-    print "Adding triangle -- got grid indices: ", grid_indices
+    #print "Adding triangle -- got grid indices: ", grid_indices
     for i,j in grid_indices:
-      self.viewer_grid_grid[i][j][0].append(ind)
+      self.viewer_grid_grid[i][j][0].add(ind)
   
   def viewer_grid_projected_point_indices(self, pt):
     return int( (pt[0] - self.viewer_grid_ll[0] - 1e-12) / self.viewer_grid_box_width  ), \
@@ -248,13 +301,14 @@ class ProjectionViewer:
   def viewer_grid_projected_segment_indices(self, s):
     I1 = self.viewer_grid_projected_point_indices(s[0])
     I2 = self.viewer_grid_projected_point_indices(s[1])
-    return [ (i,j) for i in xrange(min(I1[0], I2[0]), max(I1[0],I2[0])+1) \
-                   for j in xrange(min(I1[1], I2[1]), max(I1[1],I2[1])+1) ]
+    ans = [ (i,j) for i in xrange(min(I1[0], I2[0]), max(I1[0],I2[0])+1) \
+                  for j in xrange(min(I1[1], I2[1]), max(I1[1],I2[1])+1) ]
+    return ans
   
   def viewer_grid_projected_triangle_indices(self, t):
     I1 = self.viewer_grid_projected_point_indices(t[0])
     I2 = self.viewer_grid_projected_point_indices(t[1])
-    I3 = self.viewer_grid_projected_point_indices(t[1])
+    I3 = self.viewer_grid_projected_point_indices(t[2])
     return [ (i,j) for i in xrange(min(I1[0],I2[0],I3[0]), max(I1[0],I2[0],I3[0])+1) \
                    for j in xrange(min(I1[1],I2[1],I3[1]), max(I1[1],I2[1],I3[1])+1) ]
   

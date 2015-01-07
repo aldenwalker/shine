@@ -109,17 +109,22 @@ def cut_segment_with_triangle(s, t):
 def cut_segment_with_triangle_t_values(s, t):
   diffs = [t[(i+1)%3]-t[i] for i in xrange(3)]
   ws = [ [diffs[i].cross(s[j]-t[i]) > 1e-8 for i in xrange(3)] for j in xrange(2)]
+  print "Cutting ", s, "with", t
+  print "Inclusions: ", ws
   if (not ws[0][0] and not ws[1][0]) or (not ws[0][1] and not ws[1][1]) or (not ws[0][2] and not ws[1][2]):
     return [[0.0,1.0]]
   if all(ws[0]):
+    print "Origin in triangle"
     for i in xrange(3):
       if not ws[1][i]:
         I = intersect_segments(s, [t[i], t[(i+1)%3]])
+        print "Got intersections:", I
         if I != None:
-          if I < 1-1e-10:
+          if I[0] < 1-1e-10:
             return [[I[0], 1.0]]
           else:
             return None
+    print "Returning none"
     #print "all in"
     return None
   if all(ws[1]):
@@ -134,13 +139,19 @@ def cut_segment_with_triangle_t_values(s, t):
     #print "all in"
     return None
   I = [intersect_segments(s, [t[i], t[(i+1)%3]]) for i in xrange(3)]
+  print "Intersections:", I
   I = [i for i in I if i != None]
   if len(I) < 2:
     return [[0.0,1.0]]
   I.sort()
-  #print I
   if I[1][0] - I[0][0] < 1e-10:
-    return None
+    
+  
+    if len(I) == 3:
+      if I[2][0] - I[1][0] < 1e-10:
+        return [[0.0,1.0]]
+      else:
+        return [ [0.0,I[1][0]], [I[2][0],1.0] ]
   return [ [0.0, I[0][0]], [I[1][0], 1.0] ]
 
 

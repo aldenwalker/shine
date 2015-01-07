@@ -670,7 +670,8 @@ class ShineEmSurfDisplay:
     T_normals = [R3.triangle_normal(t) for t in T_acted_on]
     T_visible = [self.draw_viewer.faces_eye(t[0], T_normals[i]) for i,t in enumerate(T_acted_on)]
     T_visible_only = [T_acted_on[i] for i in xrange(len(T_visible)) if T_visible[i]]
-    T_sorted_projected = self.draw_viewer.project_triangles(T_visible_only)
+    T_visible_only = self.draw_viewer.sort_triangles(T_visible_only)
+    T_projected = self.draw_viewer.project_triangles(T_visible_only)
     self.draw_viewer.viewer_grid_init_triangles(T_visible_only)
     
     #find the edges which lie on the visible boundary
@@ -687,23 +688,30 @@ class ShineEmSurfDisplay:
       #now find the visible part
       segment = [ T_acted_on[left_i][left_i_in_t], T_acted_on[left_i][(left_i_in_t+1)%3] ]
       Ti_near_segment, unused_nearby_segments = self.draw_viewer.viewer_grid_near_segment(segment)
-      print "\n\n\n"
-      visible_subsegments = self.draw_viewer.visible_subsegments(segment, T_acted_on) #[T_visible_only[i] for i in Ti_near_segment])
+      visible_subsegments = self.draw_viewer.visible_subsegments(segment, [T_visible_only[i] for i in Ti_near_segment])
       if visible_subsegments == None:
         continue
       if len(visible_subsegments) > 1:
         print "We have more than 1 visible subsegment?"
-        raise ValueError("help")
-      edges_on_boundary[ei] = len(visible_segments)
-      self.draw_viewer.viewer_grid_add_segment(visible_subsegments[0], len(visible_segments))
-      visible_segments.append(visible_subsegments[0])
-    
-    print "Visible segments:", visible_segments
-
+        print visible_subsegments
+        #raise ValueError("help")
+      for s in visible_subsegments:
+        if ei in edges_on_boundary:
+          edges_on_boundary[ei].append(len(visible_segments))
+        else:
+          edges_on_boundary[ei] = [len(visible_segments)]
+        self.draw_viewer.viewer_grid_add_segment(s, len(visible_segments))
+        visible_segments.append(s)
+        
     # draw all the triangles
     outline = ('black' if self.draw_do_mesh.get()==1 else '')
-    for i in xrange(len(T_sorted_projected)):
-      pt, am = T_sorted_projected[i]
+    for i in xrange(len(T_projected)):
+      #pt, am = self.draw_viewer.project_triangle(T_visible_only[i])
+      #if i > 4:
+      #  break
+      #if i not in self.draw_viewer.viewer_grid_grid[1][0][0]:
+      #  continue
+      pt, am = T_projected[i]
       canvas_coords = [self.draw_plane_to_canvas(x) for x in pt]
       flat_coord_list = [x for p in canvas_coords for x in p]
       grayscale = int(128*(am+1))
@@ -722,7 +730,16 @@ class ShineEmSurfDisplay:
       coords = [x for v in [dv1,dv2] for x in v]
       di = self.canvas.create_line(*coords, width=3, fill='#FF0000') 
       self.drawing_items.append(di)
-          
+    
+    for i in xrange(self.draw_viewer.viewer_grid_num_horiz_boxes):
+      for j in xrange(self.draw_viewer.viewer_grid_num_vert_boxes):
+        pts = [ (self.draw_viewer.viewer_grid_ll[0] + ia*self.draw_viewer.viewer_grid_box_width, \
+                 self.draw_viewer.viewer_grid_ll[1] + ja*self.draw_viewer.viewer_grid_box_height) 
+                 for (ia,ja) in [(i,j), (i+1, j), (i+1,j+1), (i,j+1)]]
+        cpts = [self.draw_plane_to_canvas(x) for x in pts]
+        di = self.canvas.create_polygon(*cpts, outline='#0000FF', fill='')
+        self.drawing_items.append(di)
+    
     #draw the loops
     for ell in self.shine_parent.loop_displayer.loops:
       if ell.show.get() == 0:
