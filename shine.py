@@ -27,7 +27,20 @@ def whiten_color(col):
   c1 = int(col[1:3], 16)
   c2 = int(col[3:5], 16)
   c3 = int(col[5:7], 16)
-  c1 = 
+  c1 = c1 + int((255-c1)/2.0)
+  c2 = c2 + int((255-c2)/2.0)
+  c3 = c3 + int((255-c3)/2.0)
+  return '#%02x%02x%02x' % (c1, c2, c3)
+  
+def remove_duplicate_floats(L):
+  """removes duplicate floats in a list -- it assumes they are sorted"""
+  i = 0
+  while i < len(L)-1:
+    if L[i+1]-L[i] < 1e-10:
+      del L[i+1]
+    else:
+      i += 1
+  return None
   
 
 def arc_disjoint_from_box(cc, cr, ca1, ca2, br, bh ) :
@@ -754,54 +767,86 @@ class ShineEmSurfDisplay:
     for elli, ell in enumerate(self.shine_parent.loop_displayer.loops):
       if ell.show.get() == 0:
         continue
-      shown_loop_segments.append([elli, []])
+      visible_loop_segments.append([elli, []])
       hidden_loop_segments.append([elli, []])
-      #figure out if the 0th edge starts hidden
       V = [self.shine_parent.ES.along_edge(ell.EP.edges[i].ind, ell.EP.edge_coords[i]) for i in xrange(len(ell.EP.edges))]
       V = [self.draw_transformation(v) for v in V]
-      nearby_Ti, unused_segments = self.draw_viewer.viewer_grid_near_point(V[0])
-      currently_hidden = False
-      for j in nearby_Ti:
-        if self.draw_viewer.triangle_hides_point(T_visible_only[j], V[0]):
-          current_hidden = True
-          break
-      #draw the edges    
       lep = len(ell.EP.edges)
       for i,ei in enumerate(ell.EP.edges):
         seg =  [V[i], V[(i+1)%lep]] 
-        #figure out if it crosses any (projected) boundary edge
-        unused_Ti, nearby_bd_segments = self.draw_viewer.viewer_grid_near_segment( seg )
-        t_values = []
-        for j in nearby_bd_segments:
-          t = self.draw_viewer.segments_cross_t_value(visible_segments[j], seg)
-          if t == None:
-            continue
-          t_values.append(t)
-        if len(t_values)==0:
-          #draw the whole segment
-          seg_list = (hidden_loop_segments[-1][-1] if currently_hidden else shown_loop_segments[-1][-1])
-          seg_list.append(seg)
+        if (seg[1]-seg[0]).norm() < 1e-10:
           continue
-        t_values.sort()
-        t_values = remove_duplicate_floats(t_values)
-        swap_at_one = False
-        if t_values[0] < 1e-10:
-          del t_values[0]
-        if abs(1-t_values[-1]) < 1e-10:
-          swap_at_1 = True
-          del t_values[-1]
-        current_t = 0
-        for t in t_values:
-          subseg = [ R3.along_segment(seg, current_t), R3.along_segment(seg, t) ]
-          seg_list = (hidden_loop_segments[-1][-1] if currently_hidden else shown_loop_segments[-1][-1])
-          seg_list.append(subseg)
-          current_t = t
-          currently_hidden = not currently_hidden
-        subseg = [R3.along_segment(seg, current_t), R3.along_segment(seg, 1.0)]
-        seg_list = (hidden_loop_segments[-1][-1] if currently_hidden else shown_loop_segments[-1][-1])
-        seg_list.append(subseg)
-        if swap_at_one:
-          currently_hidden = not currently_hidden
+        Ti_near_segment, unused_segments = self.draw_viewer.viewer_grid_near_segment( seg )
+        print Ti_near_segment
+        print seg
+        visible_subsegments = self.draw_viewer.visible_subsegments_t_values(seg, [T_visible_only[i] for i in Ti_near_segment])
+        print visible_subsegments
+        if visible_subsegments == None:
+          hidden_loop_segments[-1][-1].append( seg )
+          continue
+        visible_subsegments.sort()
+        previous_end_t = 0
+        for vss in visible_subsegments:
+          if vss[0]-previous_end_t > 1e-10:
+            hidden_seg = [R3.along_segment(seg, previous_end_t), R3.along_segment(seg, vss[0])]
+            hidden_loop_segments[-1][-1].append( hidden_seg )
+          visible_seg = [R3.along_segment(seg, vss[0]), R3.along_segment(seg, vss[1])]
+          visible_loop_segments[-1][-1].append(visible_seg)
+          previous_end_t = vss[1]
+        if 1-previous_end_t > 1e-10:
+          hidden_seg = [R3.along_segment(seg, previous_end_t), R3.along_segment(seg, 1.0)]
+          hidden_loop_segments[-1][-1].append( hidden_seg )
+      
+      
+      ##figure out if the 0th edge starts hidden
+      #V = [self.shine_parent.ES.along_edge(ell.EP.edges[i].ind, ell.EP.edge_coords[i]) for i in xrange(len(ell.EP.edges))]
+      #V = [self.draw_transformation(v) for v in V]
+      #nearby_Ti, unused_segments = self.draw_viewer.viewer_grid_near_point(V[0])
+      #currently_hidden = False
+      #for j in nearby_Ti:
+        #if self.draw_viewer.triangle_hides_point(T_visible_only[j], V[0]):
+          #current_hidden = True
+          #break
+      ##draw the edges    
+      #lep = len(ell.EP.edges)
+      #for i,ei in enumerate(ell.EP.edges):
+        #seg =  [V[i], V[(i+1)%lep]] 
+        ##figure out if it crosses any (projected) boundary edge
+        #unused_Ti, nearby_bd_segments = self.draw_viewer.viewer_grid_near_segment( seg )
+        #t_values = []
+        #for j in nearby_bd_segments:
+          #t = self.draw_viewer.segments_cross_t_value(seg, visible_segments[j])
+          #if t == None:
+            #continue
+          #t_values.append(t)
+        #if len(t_values)==0:
+          ##draw the whole segment
+          #seg_list = (hidden_loop_segments[-1][-1] if currently_hidden else visible_loop_segments[-1][-1])
+          #seg_list.append(seg)
+          #continue
+        #t_values.sort()
+        #remove_duplicate_floats(t_values)
+        #swap_at_one = False
+        #if t_values[0] < 1e-10:
+          #del t_values[0]
+        #if len(t_values)>0 and abs(1-t_values[-1]) < 1e-10:
+          #swap_at_1 = True
+          #del t_values[-1]
+        #current_t = 0
+        #for t in t_values:
+          #subseg = [ R3.along_segment(seg, current_t), R3.along_segment(seg, t) ]
+          #seg_list = (hidden_loop_segments[-1][-1] if currently_hidden else visible_loop_segments[-1][-1])
+          #seg_list.append(subseg)
+          #current_t = t
+          #currently_hidden = not currently_hidden
+        #subseg = [R3.along_segment(seg, current_t), R3.along_segment(seg, 1.0)]
+        #seg_list = (hidden_loop_segments[-1][-1] if currently_hidden else visible_loop_segments[-1][-1])
+        #seg_list.append(subseg)
+        #if swap_at_one:
+          #currently_hidden = not currently_hidden
+          
+          
+          
     ### done finding the segments for the loops
     #now actually draw them
     for elli, segs in hidden_loop_segments:
@@ -812,7 +857,7 @@ class ShineEmSurfDisplay:
         coords = [x for v in cp for x in v]
         di = self.canvas.create_line(*coords, width=3, fill=col)
         self.drawing_items.append(di)
-    for elli, segs in shown_loop_segments:
+    for elli, segs in visible_loop_segments:
       col = self.shine_parent.loop_displayer.loops[elli].color
       for s in segs:
         cp = [self.draw_plane_to_canvas(self.draw_viewer.project_point(s[0])), \

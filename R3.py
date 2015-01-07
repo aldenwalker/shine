@@ -112,7 +112,7 @@ class ProjectionViewer:
     hyp_n = [-(t[1]-t[0]).cross(t[2]-t[0])]
     hyp_pt.extend( [t[i] for i in xrange(3)] )
     hyp_n.extend( [(self.eye-t[i]).cross(t[(i+1)%3]-t[i]) for i in xrange(3)] )
-    inclusions = [ [ (p-hyp_pt[i]).dot(hyp_n[i]) > 1e-10 for i in xrange(4)] for s in segment ]
+    inclusions = [ (p-hyp_pt[i]).dot(hyp_n[i]) > 1e-10 for i in xrange(4)]
     return all(inclusions)
     
   def faces_eye(self, pt, v):
@@ -150,12 +150,22 @@ class ProjectionViewer:
     #sorted_T = sorted(T, key=lambda x: ((x[0]+x[1]+x[2])/3.0 -self.eye).norm(), reverse=True)
     return [self.project_triangle(t) for t in T]
   
+  def segments_cross_t_value(self, s0, s1):
+    ps0 = map(self.project_point, s0)
+    ps1 = map(self.project_point, s1)
+    t = R2.intersect_segments(ps0, ps1)
+    if t == None:
+      return None
+    else:
+      return t[0]
+  
   def visible_subsegments_one_triangle_t_values(self, segment, t):
     hyp_pt = [t[0]]
     hyp_n = [-(t[1]-t[0]).cross(t[2]-t[0])]
     hyp_pt.extend( [t[i] for i in xrange(3)] )
     hyp_n.extend( [(self.eye-t[i]).cross(t[(i+1)%3]-t[i]) for i in xrange(3)] )
-    inclusions = [ [ (s-hyp_pt[i]).dot(hyp_n[i]) > 1e-10 for i in xrange(4)] for s in segment ]
+    inclusions_dots = [ [ (s-hyp_pt[i]).dot(hyp_n[i]) for i in xrange(4)] for s in segment ]
+    inclusions = 
     #print "Inclusions: ", inclusions
     all_in_0 = all(inclusions[0])
     all_in_1 = all(inclusions[1])
@@ -193,6 +203,8 @@ class ProjectionViewer:
           return None
         return [ [0.0, t_values[0]] ]
       else:
+        print t_values
+        [ [ (s-hyp_pt[i]).dot(hyp_n[i]) for i in xrange(4)] for s in segment ]
         print "Wrong number of intersections?"
         raise ValueError("Wrong number of intersections?")
     elif len(t_values) == 2:
@@ -231,6 +243,21 @@ class ProjectionViewer:
     #print "Returning ", segs
     return segs
 
+  def visible_subsegments_t_values(self, segment, T):
+    VSS = self.visible_subsegments(segment, T)
+    if VSS == None:
+      return VSS
+    ans = []
+    v = segment[1] - segment[0]
+    vdv = v.dot(v)
+    for vss in VSS:
+      vssv1 = vss[0]-segment[0]
+      t1 = v.dot(vssv1)/vdv
+      vssv2 = vss[1]-segment[0]
+      t2 = v.dot(vssv2)/vdv
+      ans.append([t1, t2])
+    return ans
+    
   
   def viewer_grid_init_triangles(self, T):
     T_projected = [map(self.project_point, t) for t in T]
@@ -279,7 +306,7 @@ class ProjectionViewer:
       nearby_segments.update(self.viewer_grid_grid[i][j][1])
     return nearby_triangles, nearby_segments
   
-  def vewier_grid_near_point(self, pt):
+  def viewer_grid_near_point(self, pt):
     grid_index = self.viewer_grid_projected_point_indices( self.project_point(pt) )
     return self.viewer_grid_grid[grid_index[0]][grid_index[1]]
   
