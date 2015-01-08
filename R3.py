@@ -15,6 +15,16 @@ def segment_intersect_plane_t_value(s, pt, n):
     return None
   return (pt.dot(n) - s[0].dot(n)) / dn
 
+def remove_duplicate_floats(L):
+  """removes duplicate floats in a list -- it assumes they are sorted"""
+  i = 0
+  while i < len(L)-1:
+    if L[i+1]-L[i] < 1e-10:
+      del L[i+1]
+    else:
+      i += 1
+  return None
+
 class Vector:
   def __init__(self, L):
     if isinstance(L, int):
@@ -165,65 +175,58 @@ class ProjectionViewer:
     hyp_pt.extend( [t[i] for i in xrange(3)] )
     hyp_n.extend( [(self.eye-t[i]).cross(t[(i+1)%3]-t[i]) for i in xrange(3)] )
     inclusion_dots = [ [ (s-hyp_pt[i]).dot(hyp_n[i]) for i in xrange(4)] for s in segment ]
-    inclusions = [ [d>0 for d in sd] for sd in inclusion_dots]
-    #print "Inclusions: ", inclusions
-    all_in_0 = all(inclusions[0])
-    all_in_1 = all(inclusions[1])
-    if all_in_0 and all_in_1:
-      return None
+    inclusion_status = [ [(0 if abs(d)<1e-10 else (1 if d>0 else -1)) for d in sd] for sd in inclusion_dots]
+    #print "Intersecting ", segment, "with", t
     t_values = []
     for i in xrange(4):
-      if not inclusions[0][i] and not inclusions[1][i]:
+      is0 = inclusion_status[0][i]
+      is1 = inclusion_status[1][i]
+      if is0<=0 and is1<=0:
         return [[0.0,1.0]]
-      if inclusions[0][i] != inclusions[1][i]:
+      if is0*is1 < 0:
         pierce_t = segment_intersect_plane_t_value(segment, hyp_pt[i], hyp_n[i])
         if pierce_t == None:
-          print segment, inclusion_dots, i
-          raise ValueError("didn't pierce plane?")
+          print "Inclusions: ", inclusion_dots
+          print "Inclusion_status: ", inclusion_status
+          print "Index ", i
         pierce_point = along_segment(segment, pierce_t)
-        if all( [ (pierce_point-hyp_pt[j]).dot(hyp_n[j]) >= -1e-10 for j in xrange(4)] ):
-          t_values.append(pierce_t) 
-    if len(t_values)==0:
-      return [[0.0,1.0]]
+        #print pierce_t
+        #print pierce_point
+        #print [ (pierce_point-hyp_pt[j]).dot(hyp_n[j])  for j in xrange(4) if j!=i]
+        if any([ (pierce_point-hyp_pt[j]).dot(hyp_n[j]) < 0 for j in xrange(4) if j != i]):
+          continue
+        t_values.append(pierce_t)
+        continue
     t_values.sort()
-    #print "t values:", t_values
-    #remove duplicate t values
-    i=0
-    while i<len(t_values)-1:
-      if t_values[i+1]-t_values[i] < 1e-8:
-        del t_values[i+1]
-      else:
-        i+=1
-    #print "return t values:", t_values
-    #there's only a few possibilities
-    if len(t_values) == 1:
-      if all_in_0:
-        if abs(1-t_values[0]) < 1e-10:
-          return None
-        return [ [t_values[0], 1.0] ]
-      elif all_in_1:
-        if abs(t_values[0]) < 1e-10:
-          return None
-        return [ [0.0, t_values[0]] ]
-      else:
-        print t_values
-        [ [ (s-hyp_pt[i]).dot(hyp_n[i]) for i in xrange(4)] for s in segment ]
-        print "Wrong number of intersections?"
-        raise ValueError("Wrong number of intersections?")
-    elif len(t_values) == 2:
-      zerot1 = t_values[0] < 1e-10
-      onet2 = abs(1-t_values[1]) < 1e-10
-      if zerot1 and onet2:
+    #print t_values
+    remove_duplicate_floats(t_values)
+    all_in_0 = all([x>=0 for x in inclusion_status[0]])
+    if all_in_0:
+      ltv = len(t_values)
+      if ltv == 0:
         return None
-      elif zerot1:
-        return [ [t_values[1], 1.0] ]
-      elif onet2:
-        return [ [0.0, t_values[0]] ]
-      return [ [0.0, t_values[0]], [t_values[1], 1.0] ]
-    else:
-      print "Wrong number of intersections?"
-      raise ValueError("Wrong number of intersections?")
-    return None
+      elif ltv > 1:
+        raise ValueError("Wrong number of t values?")
+      else:
+        return [[t_values[0], 1.0]]
+    all_in_1 = all([x>=0 for x in inclusion_status[1]])
+    if all_in_1:
+      if len(t_values) != 1:
+        print inclusion_dots
+        print inclusion_status
+        print t_values
+        raise ValueError("Wrong number of t values?")
+      return [[0.0,t_values[0]]]
+    ltv = len(t_values)
+    if ltv == 0 or ltv == 1:
+      return [[0.0,1.0]]
+    if ltv == 2:
+      return [[0.0,t_values[0]],[t_values[1],1.0]]
+    print inclusion_dots
+    print inclusion_status
+    print t_values
+    raise ValueError("Wrong number of t values?")
+
   
   def visible_subsegments(self, segment, T):
     """returns a list of 3d segments which remain after cutting with all 

@@ -27,9 +27,9 @@ def whiten_color(col):
   c1 = int(col[1:3], 16)
   c2 = int(col[3:5], 16)
   c3 = int(col[5:7], 16)
-  c1 = c1 + int((255-c1)/2.0)
-  c2 = c2 + int((255-c2)/2.0)
-  c3 = c3 + int((255-c3)/2.0)
+  c1 = c1 + int((255-c1)/1.2)
+  c2 = c2 + int((255-c2)/1.2)
+  c3 = c3 + int((255-c3)/1.2)
   return '#%02x%02x%02x' % (c1, c2, c3)
   
 def remove_duplicate_floats(L):
@@ -471,6 +471,7 @@ class Shine:
     self.menubar.add_cascade(label='File', menu=self.filemenu)
     self.viewmenu = tk.Menu(self.menubar, tearoff=0)
     self.viewmenu.add_checkbutton(label='Mesh', variable=self.emsurf_displayer.draw_do_mesh, command=self.emsurf_displayer.canvas_redraw)
+    self.viewmenu.add_checkbutton(label='Shading', variable=self.emsurf_displayer.draw_do_shading, command=self.emsurf_displayer.canvas_redraw)
     self.viewmenu.add_checkbutton(label='Lifted surface', variable=self.do_show_lift, command=self.swap_show_lift) 
     self.menubar.add_cascade(label='View', menu=self.viewmenu)
     self.actionmenu = tk.Menu(self.menubar, tearoff=0)
@@ -615,12 +616,17 @@ class ShineEmSurfDisplay:
     self.shine_parent = shine_parent
     
     # set up the window
-    self.tk_parent.rowconfigure(3, weight=1)
+    self.tk_parent.rowconfigure(5, weight=1)
     self.tk_parent.columnconfigure(0, weight=1)
     
     self.canvas = tk.Canvas(self.tk_parent, borderwidth=0)
     self.canvas.bind('<Configure>', self.canvas_resize)
-    self.canvas.grid(column=0, row=0, rowspan=4, columnspan=4, sticky=tk.W+tk.E+tk.N+tk.S)
+    self.canvas.grid(column=0, row=0, rowspan=6, columnspan=4, sticky=tk.W+tk.E+tk.N+tk.S)
+    
+    self.draw_do_mesh = tk.IntVar()
+    self.draw_do_shading = tk.IntVar()
+    self.draw_do_mesh.set(1)
+    self.draw_do_shading.set(1)
     
     self.rotate_vert_ccw_button = tk.Button(self.tk_parent, text='>', command=lambda : self.rotate('vert_ccw'))
     self.rotate_vert_cw_button = tk.Button(self.tk_parent, text='<', command=lambda : self.rotate('vert_cw'))
@@ -628,22 +634,21 @@ class ShineEmSurfDisplay:
     self.rotate_horiz_cw_button = tk.Button(self.tk_parent, text='^', command=lambda : self.rotate('horiz_cw'))
     self.zoom_in_button = tk.Button(self.tk_parent, text='+', command=lambda : self.zoom('in'))
     self.zoom_out_button = tk.Button(self.tk_parent, text='-', command=lambda : self.zoom('out'))
-    self.draw_do_mesh_button = tk.Button(self.tk_parent, text='#', command=self.swap_mesh)
     self.subdivide_button = tk.Button(self.tk_parent, text='S', command=self.shine_parent.subdivide)
     self.flow_button = tk.Button(self.tk_parent, text='F', command=self.shine_parent.flow)
+    self.draw_do_mesh_check = tk.Checkbutton(self.tk_parent, text='Mesh', variable=self.draw_do_mesh, command=self.canvas_redraw)
+    self.draw_do_shading_check = tk.Checkbutton(self.tk_parent, text='Shading', variable=self.draw_do_shading, command=self.canvas_redraw)
     self.rotate_vert_ccw_button.grid(row=1, column=3)
     self.rotate_vert_cw_button.grid(row=1, column=1)
     self.rotate_horiz_ccw_button.grid(row=2, column=2)
     self.rotate_horiz_cw_button.grid(row=0, column=2)
     self.zoom_in_button.grid(row=0, column=1)
     self.zoom_out_button.grid(row=0, column=3)
-    self.draw_do_mesh_button.grid(row=1, column=2)
     self.subdivide_button.grid(row=2, column=1)
     self.flow_button.grid(row=2, column=3)
+    self.draw_do_mesh_check.grid(row=3, column=1, columnspan=2, sticky=tk.W)
+    self.draw_do_shading_check.grid(row=4, column=1, columnspan=2, sticky=tk.W)
     
-    #set up the drawing
-    self.draw_do_mesh = tk.IntVar()
-    self.draw_do_mesh.set(1)
     self.drawing_items = []
     self.reset()
     
@@ -667,10 +672,14 @@ class ShineEmSurfDisplay:
     self.draw_canvas_center = (self.canvas_width/2, self.canvas_height/2)
     self.canvas_redraw()
   
-  def swap_mesh(self):
-    self.draw_do_mesh.set(1-self.draw_do_mesh.get())
-    self.canvas_redraw()
-  
+#   def swap_mesh(self):
+#     self.draw_do_mesh.set(1-self.draw_do_mesh.get())
+#     self.canvas_redraw()
+#     
+#   def swap_shading(self):
+#     self.draw_do_shading.set(1-self.draw_do_shading.get())
+#     self.canvas_redraw()
+    
   def draw_plane_to_canvas(self, pt):
     scaled = (self.draw_plane_to_canvas_scale*pt[0], self.draw_plane_to_canvas_scale*pt[1])
     return (self.draw_canvas_center[0] + scaled[0], self.draw_canvas_center[1] - scaled[1])
@@ -723,45 +732,18 @@ class ShineEmSurfDisplay:
           edges_on_boundary[ei] = [len(visible_segments)]
         self.draw_viewer.viewer_grid_add_segment(s, len(visible_segments))
         visible_segments.append(s)
-        
-    # draw all the triangles
-    outline = ('black' if self.draw_do_mesh.get()==1 else '')
-    for i in xrange(len(T_projected)):
-      #pt, am = self.draw_viewer.project_triangle(T_visible_only[i])
-      #if i > 4:
-      #  break
-      #if i not in self.draw_viewer.viewer_grid_grid[1][0][0]:
-      #  continue
-      pt, am = T_projected[i]
-      canvas_coords = [self.draw_plane_to_canvas(x) for x in pt]
-      flat_coord_list = [x for p in canvas_coords for x in p]
-      grayscale = int(128*(am+1))
-      rgb = '#%02x%02x%02x' % (grayscale, grayscale, grayscale)
-      #print "Drawing triangle: ", canvas_coords
-      #print "Amount: ", rgb
-      di = self.canvas.create_polygon(*flat_coord_list, fill=rgb, outline=outline)
-      self.drawing_items.append(di)
     
-    #draw the boundary
-    for VS in visible_segments:
-      v1, v2 = VS
-      v1p, v2p = map(self.draw_viewer.project_point, [v1, v2])
-      dv1 = self.draw_plane_to_canvas(v1p)
-      dv2 = self.draw_plane_to_canvas(v2p)
-      coords = [x for v in [dv1,dv2] for x in v]
-      di = self.canvas.create_line(*coords, width=3, fill='#FF0000') 
-      self.drawing_items.append(di)
+    #draw the grid
+    # for i in xrange(self.draw_viewer.viewer_grid_num_horiz_boxes):
+#       for j in xrange(self.draw_viewer.viewer_grid_num_vert_boxes):
+#         pts = [ (self.draw_viewer.viewer_grid_ll[0] + ia*self.draw_viewer.viewer_grid_box_width, \
+#                  self.draw_viewer.viewer_grid_ll[1] + ja*self.draw_viewer.viewer_grid_box_height) 
+#                  for (ia,ja) in [(i,j), (i+1, j), (i+1,j+1), (i,j+1)]]
+#         cpts = [self.draw_plane_to_canvas(x) for x in pts]
+#         di = self.canvas.create_polygon(*cpts, outline='#0000FF', fill='')
+#         self.drawing_items.append(di)
     
-    for i in xrange(self.draw_viewer.viewer_grid_num_horiz_boxes):
-      for j in xrange(self.draw_viewer.viewer_grid_num_vert_boxes):
-        pts = [ (self.draw_viewer.viewer_grid_ll[0] + ia*self.draw_viewer.viewer_grid_box_width, \
-                 self.draw_viewer.viewer_grid_ll[1] + ja*self.draw_viewer.viewer_grid_box_height) 
-                 for (ia,ja) in [(i,j), (i+1, j), (i+1,j+1), (i,j+1)]]
-        cpts = [self.draw_plane_to_canvas(x) for x in pts]
-        di = self.canvas.create_polygon(*cpts, outline='#0000FF', fill='')
-        self.drawing_items.append(di)
-    
-    #draw the loops
+    #construct the loops
     visible_loop_segments = []
     hidden_loop_segments = []
     for elli, ell in enumerate(self.shine_parent.loop_displayer.loops):
@@ -777,10 +759,7 @@ class ShineEmSurfDisplay:
         if (seg[1]-seg[0]).norm() < 1e-10:
           continue
         Ti_near_segment, unused_segments = self.draw_viewer.viewer_grid_near_segment( seg )
-        print Ti_near_segment
-        print seg
         visible_subsegments = self.draw_viewer.visible_subsegments_t_values(seg, [T_visible_only[i] for i in Ti_near_segment])
-        print visible_subsegments
         if visible_subsegments == None:
           hidden_loop_segments[-1][-1].append( seg )
           continue
@@ -796,59 +775,24 @@ class ShineEmSurfDisplay:
         if 1-previous_end_t > 1e-10:
           hidden_seg = [R3.along_segment(seg, previous_end_t), R3.along_segment(seg, 1.0)]
           hidden_loop_segments[-1][-1].append( hidden_seg )
-      
-      
-      ##figure out if the 0th edge starts hidden
-      #V = [self.shine_parent.ES.along_edge(ell.EP.edges[i].ind, ell.EP.edge_coords[i]) for i in xrange(len(ell.EP.edges))]
-      #V = [self.draw_transformation(v) for v in V]
-      #nearby_Ti, unused_segments = self.draw_viewer.viewer_grid_near_point(V[0])
-      #currently_hidden = False
-      #for j in nearby_Ti:
-        #if self.draw_viewer.triangle_hides_point(T_visible_only[j], V[0]):
-          #current_hidden = True
-          #break
-      ##draw the edges    
-      #lep = len(ell.EP.edges)
-      #for i,ei in enumerate(ell.EP.edges):
-        #seg =  [V[i], V[(i+1)%lep]] 
-        ##figure out if it crosses any (projected) boundary edge
-        #unused_Ti, nearby_bd_segments = self.draw_viewer.viewer_grid_near_segment( seg )
-        #t_values = []
-        #for j in nearby_bd_segments:
-          #t = self.draw_viewer.segments_cross_t_value(seg, visible_segments[j])
-          #if t == None:
-            #continue
-          #t_values.append(t)
-        #if len(t_values)==0:
-          ##draw the whole segment
-          #seg_list = (hidden_loop_segments[-1][-1] if currently_hidden else visible_loop_segments[-1][-1])
-          #seg_list.append(seg)
-          #continue
-        #t_values.sort()
-        #remove_duplicate_floats(t_values)
-        #swap_at_one = False
-        #if t_values[0] < 1e-10:
-          #del t_values[0]
-        #if len(t_values)>0 and abs(1-t_values[-1]) < 1e-10:
-          #swap_at_1 = True
-          #del t_values[-1]
-        #current_t = 0
-        #for t in t_values:
-          #subseg = [ R3.along_segment(seg, current_t), R3.along_segment(seg, t) ]
-          #seg_list = (hidden_loop_segments[-1][-1] if currently_hidden else visible_loop_segments[-1][-1])
-          #seg_list.append(subseg)
-          #current_t = t
-          #currently_hidden = not currently_hidden
-        #subseg = [R3.along_segment(seg, current_t), R3.along_segment(seg, 1.0)]
-        #seg_list = (hidden_loop_segments[-1][-1] if currently_hidden else visible_loop_segments[-1][-1])
-        #seg_list.append(subseg)
-        #if swap_at_one:
-          #currently_hidden = not currently_hidden
-          
-          
           
     ### done finding the segments for the loops
-    #now actually draw them
+    
+    # draw all the triangles
+    triangle_outline = ('black' if self.draw_do_mesh.get()==1 else '')
+    triangle_shading = (self.draw_do_shading.get()==1)
+    for i in xrange(len(T_projected)):
+      pt, am = T_projected[i]
+      canvas_coords = [self.draw_plane_to_canvas(x) for x in pt]
+      flat_coord_list = [x for p in canvas_coords for x in p]
+      grayscale = int(128*(am+1))
+      rgb = ('#%02x%02x%02x' % (grayscale, grayscale, grayscale) if triangle_shading else '')
+      #print "Drawing triangle: ", canvas_coords
+      #print "Amount: ", rgb
+      di = self.canvas.create_polygon(*flat_coord_list, fill=rgb, outline=triangle_outline)
+      self.drawing_items.append(di)
+    
+    #Draw the hidden loop segments
     for elli, segs in hidden_loop_segments:
       col = whiten_color(self.shine_parent.loop_displayer.loops[elli].color)
       for s in segs:
@@ -857,6 +801,18 @@ class ShineEmSurfDisplay:
         coords = [x for v in cp for x in v]
         di = self.canvas.create_line(*coords, width=3, fill=col)
         self.drawing_items.append(di)
+    
+    #draw the boundary
+    for VS in visible_segments:
+      v1, v2 = VS
+      v1p, v2p = map(self.draw_viewer.project_point, [v1, v2])
+      dv1 = self.draw_plane_to_canvas(v1p)
+      dv2 = self.draw_plane_to_canvas(v2p)
+      coords = [x for v in [dv1,dv2] for x in v]
+      di = self.canvas.create_line(*coords, width=3, fill='#000000') 
+      self.drawing_items.append(di)
+    
+    #draw the visible loop segments
     for elli, segs in visible_loop_segments:
       col = self.shine_parent.loop_displayer.loops[elli].color
       for s in segs:
