@@ -4,10 +4,12 @@ import gsurf
 import emsurf
 import mobius
 import R3
+from signedind import SignedInd as SI
 
 import math
 import copy
 import random
+import collections
 
 import Tkinter as tk
 import tkFileDialog
@@ -564,6 +566,9 @@ class Shine:
     surface_mesh_mesh = tk.IntVar()
     surface_mesh_mesh.set(1)
     W_surface_mesh_mesh = tk.Checkbutton(W_surface_option_frame, text='Mesh', variable=surface_mesh_mesh)
+    surface_mesh_outline = tk.IntVar()
+    surface_mesh_outline.set(1)
+    W_surface_mesh_outline = tk.Checkbutton(W_surface_option_frame, text='Thick outline', variable=surface_mesh_outline)
     
     W_surface_outline = tk.Radiobutton(W_surface_option_frame, text='Outline', variable=surface_outline, value=1, command=change_surface_style)
     surface_outline_smooth = tk.IntVar()
@@ -573,8 +578,9 @@ class Shine:
     W_surface_mesh.grid(row=0, column=0, columnspan=2,sticky=tk.W)
     W_surface_mesh_shading.grid(row=1, column=1, sticky=tk.W, padx=10)
     W_surface_mesh_mesh.grid(row=2, column=1,sticky=tk.W, padx=10)
-    W_surface_outline.grid(row=3, column=0, columnspan=2,sticky=tk.W)
-    W_surface_outline_smooth.grid(row=4, column=1,sticky=tk.W, padx=10)
+    W_surface_mesh_outline.grid(row=3, column=1,sticky=tk.W, padx=10)
+    W_surface_outline.grid(row=4, column=0, columnspan=2,sticky=tk.W)
+    W_surface_outline_smooth.grid(row=5, column=1,sticky=tk.W, padx=10)
     
     W_loop_option_frame = tk.LabelFrame(dialog, text='Loop options')
     loop_smooth = tk.IntVar()
@@ -604,7 +610,18 @@ class Shine:
     
     dialog.wait_window(dialog)
     
-    print ("OK" if OK.get()==1 else "Cancel")
+    if OK.get()==0:
+      return
+    
+    filename = tkFileDialog.asksaveasfilename(parent=self.parent)
+    
+    self.emsurf_displayer.write_svg(filename, surface_outline=(surface_outline.get()==1), \
+                                              surface_mesh_mesh=(surface_mesh_mesh.get()==1), \
+                                              surface_mesh_shading=(surface_mesh_shading.get()==1), \
+                                              surface_mesh_outline=(surface_mesh_outline.get()==1), \
+                                              surface_outline_smooth=(surface_outline_smooth.get()==1), \
+                                              loop_smooth=(loop_smooth.get()==1))
+    
     
 
 ############################################################################
@@ -646,9 +663,12 @@ class ShineEmSurfDisplay:
     self.zoom_out_button.grid(row=0, column=3)
     self.subdivide_button.grid(row=2, column=1)
     self.flow_button.grid(row=2, column=3)
-    self.draw_do_mesh_check.grid(row=3, column=1, columnspan=2, sticky=tk.W)
-    self.draw_do_shading_check.grid(row=4, column=1, columnspan=2, sticky=tk.W)
+    #self.draw_do_mesh_check.grid(row=3, column=1, columnspan=2, sticky=tk.W)
+    #self.draw_do_shading_check.grid(row=4, column=1, columnspan=2, sticky=tk.W)
     
+    
+    self.drawing_visible_triangles = []
+    self.drawing_boundary = []
     self.drawing_items = []
     self.reset()
     
@@ -662,6 +682,7 @@ class ShineEmSurfDisplay:
     self.draw_canvas_center = (self.canvas_width/2, self.canvas_height/2)
     self.draw_plane_to_canvas_scale = 700.0
     self.draw_do_mesh.set(1)
+    self.draw_do_shading.set(1)
     self.canvas_redraw()
     
   def canvas_resize(self, event):
@@ -684,28 +705,20 @@ class ShineEmSurfDisplay:
     scaled = (self.draw_plane_to_canvas_scale*pt[0], self.draw_plane_to_canvas_scale*pt[1])
     return (self.draw_canvas_center[0] + scaled[0], self.draw_canvas_center[1] - scaled[1])
   
-  def canvas_redraw(self):
-    #erase the canvas
-    for di in self.drawing_items:
-      self.canvas.delete(di)
-    self.drawing_items = []
-    
-    #if there's no surface, show nothing
-    if self.shine_parent.ES == None:
-      self.drawing_items.append( self.canvas.create_text(*self.draw_canvas_center, text='(No surface; open a new surface with the file menu)') )
-      return
-    
+  #########################################################################
+  # this function recomputes the triangles and boundary
+  #########################################################################
+  def recompute_drawing(self):
     #act on everything
     T_acted_on = [[self.draw_transformation(x) for x in t] for t in self.shine_parent.ES.em_t]
     T_normals = [R3.triangle_normal(t) for t in T_acted_on]
     T_visible = [self.draw_viewer.faces_eye(t[0], T_normals[i]) for i,t in enumerate(T_acted_on)]
     T_visible_only = [T_acted_on[i] for i in xrange(len(T_visible)) if T_visible[i]]
     T_visible_only = self.draw_viewer.sort_triangles(T_visible_only)
-    T_projected = self.draw_viewer.project_triangles(T_visible_only)
+    self.drawing_visible_triangles = T_visible_only
     self.draw_viewer.viewer_grid_init_triangles(T_visible_only)
     
     #find the edges which lie on the visible boundary
-    #(even the hidden ones)
     edges_on_boundary = dict()
     visible_segments = []
     for ei in xrange(len(self.shine_parent.ES.e)):
@@ -718,20 +731,155 @@ class ShineEmSurfDisplay:
       #now find the visible part
       segment = [ T_acted_on[left_i][left_i_in_t], T_acted_on[left_i][(left_i_in_t+1)%3] ]
       Ti_near_segment, unused_nearby_segments = self.draw_viewer.viewer_grid_near_segment(segment)
-      visible_subsegments = self.draw_viewer.visible_subsegments(segment, [T_visible_only[i] for i in Ti_near_segment])
+      visible_subsegments = self.draw_viewer.visible_subsegments_t_values(segment, [T_visible_only[i] for i in Ti_near_segment])
       if visible_subsegments == None:
         continue
       if len(visible_subsegments) > 1:
         print "We have more than 1 visible subsegment?"
         print visible_subsegments
-        #raise ValueError("help")
-      for s in visible_subsegments:
-        if ei in edges_on_boundary:
-          edges_on_boundary[ei].append(len(visible_segments))
+        raise ValueError("help")
+      edges_on_boundary[ei] = len(visible_segments)
+      #self.draw_viewer.viewer_grid_add_segment(visible_subsegments[0], len(visible_segments))
+      visible_segments.append( ( visible_subsegments[0], R3.subsegment_from_t_values(segment, visible_subsegments[0]) ) )
+    #join up the boundary edges into connected groups
+    self.drawing_boundary = []
+    while True:
+      #get a starting edge
+      #print "Current edges_on_boundary:", edges_on_boundary
+      try:
+        ei, si = edges_on_boundary.popitem()
+        seg_t, seg = visible_segments[si]
+      except KeyError:
+        break
+      #the stack records; do we try to go forwards or backwards along the 
+      #edge (True=forward), and do we add the next one on to the end (True) or beginning
+      stack = []
+      if abs(seg_t[0]) < 1e-10:
+        stack.append( (ei, False, False) )
+      if abs(seg_t[1]-1.0) < 1e-10:
+        stack.append( (ei, True, True) )
+      current_path = collections.deque(seg)
+      #print "Starting on edge", ei
+      while len(stack)>0:
+        #print "Current stack: ", stack
+        #print "Current path:", current_path
+        ei, direc, append_to_end = stack.pop()
+        vi = (self.shine_parent.ES.e[ei].dest if direc else self.shine_parent.ES.e[ei].source)
+        this_ei_in_v = (SI(ei,-1) if direc else SI(ei,1))
+        v = self.shine_parent.ES.v[vi]
+        putative_edge = None
+        for di in v.i_edges:
+          if di.ind in edges_on_boundary and di != this_ei_in_v:
+            putative_edge = di
+            break
+        if putative_edge == None:
+          #print "we've come to the end of this part"
+          continue
+        #print "Next putative edge", putative_edge
+        putative_seg_t, putative_seg = visible_segments[edges_on_boundary[putative_edge.ind]]
+        del edges_on_boundary[putative_edge.ind]
+        #print "Putative seg_t and seg:", putative_seg_t, putative_seg
+        if putative_edge.sign > 0:
+          if putative_seg_t[0] > 1e-10:
+            #print "Not appending"
+            continue
+          if abs(putative_seg_t[1]-1)<1e-10:
+            stack.append( (putative_edge.ind, (putative_edge.sign==1), append_to_end) )
+          if append_to_end:
+            current_path.append( putative_seg[1] )
+          else:
+            current_path.appendleft( putative_seg[1] )
         else:
-          edges_on_boundary[ei] = [len(visible_segments)]
-        self.draw_viewer.viewer_grid_add_segment(s, len(visible_segments))
-        visible_segments.append(s)
+          if putative_seg_t[1] < 1-1e-10:
+            #print "Not appending"
+            continue
+          if abs(putative_seg_t[0]) < 1e-10:
+            stack.append( (putative_edge.ind, (putative_edge.sign==1), append_to_end) )
+          if append_to_end:
+            current_path.append( putative_seg[0] )
+          else:
+            current_path.appendleft( putative_seg[0] )  
+      #we're done, so the current list is a good polygonal path
+      self.drawing_boundary.append(R3.PolygonalPath(current_path))
+    #print "Drawing boundary:\n"
+    #for db in self.drawing_boundary:
+    #  print db
+      
+      
+    #recompute all the loop data
+    for ell in self.shine_parent.loop_displayer.loops:
+      if ell.show.get() == 0:
+        continue
+      ell.recompute_drawing()
+
+  
+  
+  #######################################################################
+  # recompute the drawing and redraw the canvas
+  #######################################################################
+  def canvas_redraw(self):
+    #erase the canvas
+    for di in self.drawing_items:
+      self.canvas.delete(di)
+    self.drawing_items = []
+    
+    #if there's no surface, show nothing
+    if self.shine_parent.ES == None:
+      self.drawing_items.append( self.canvas.create_text(*self.draw_canvas_center, text='(No surface; open a new surface with the file menu)') )
+      return
+    
+    #this recomputes the visible items and the grid
+    self.recompute_drawing()
+    
+    #now draw them to the screen
+    # draw all the triangles
+    triangle_outline = ('black' if self.draw_do_mesh.get()==1 else '')
+    triangle_shading = (self.draw_do_shading.get()==1)
+    if triangle_outline != '' or triangle_shading:
+      for t in self.drawing_visible_triangles:
+        pt, am = self.draw_viewer.project_triangle(t)
+        canvas_coords = [self.draw_plane_to_canvas(x) for x in pt]
+        flat_coord_list = [x for p in canvas_coords for x in p]
+        grayscale = int(128*(am+1))
+        rgb = ('#%02x%02x%02x' % (grayscale, grayscale, grayscale) if triangle_shading else '')
+        #print "Drawing triangle: ", canvas_coords
+        #print "Amount: ", rgb
+        di = self.canvas.create_polygon(*flat_coord_list, fill=rgb, outline=triangle_outline)
+        self.drawing_items.append(di)
+    
+    #Draw the hidden loop segments
+    for ell in self.shine_parent.loop_displayer.loops:
+      if ell.show.get() == 0:
+        continue
+      for kind, pp in ell.PPs:
+        if kind == 'visible':
+          continue
+        col = whiten_color(ell.color)
+        projected_v = [self.draw_plane_to_canvas(self.draw_viewer.project_point(v)) for v in pp.L]
+        coords = [x for v in projected_v for x in v]
+        di = self.canvas.create_line(*coords, width=3, fill=col)
+        self.drawing_items.append(di)
+    
+    #draw the boundary
+    for be in self.drawing_boundary:
+      col = '#000000' #rand_bright_color()
+      projected_v = [self.draw_plane_to_canvas(self.draw_viewer.project_point(v)) for v in  be.L]
+      coords = [x for v in projected_v for x in v]
+      di = self.canvas.create_line(*coords, width=3, fill=col) 
+      self.drawing_items.append(di)
+    
+    #draw the visible loop segments
+    for ell in self.shine_parent.loop_displayer.loops:
+      if ell.show.get() == 0:
+        continue
+      for kind, pp in ell.PPs:
+        if kind == 'hidden':
+          continue
+        col = ell.color
+        projected_v = [self.draw_plane_to_canvas(self.draw_viewer.project_point(v)) for v in pp.L]
+        coords = [x for v in projected_v for x in v]
+        di = self.canvas.create_line(*coords, width=3, fill=col)
+        self.drawing_items.append(di)
     
     #draw the grid
     # for i in xrange(self.draw_viewer.viewer_grid_num_horiz_boxes):
@@ -743,87 +891,12 @@ class ShineEmSurfDisplay:
 #         di = self.canvas.create_polygon(*cpts, outline='#0000FF', fill='')
 #         self.drawing_items.append(di)
     
-    #construct the loops
-    visible_loop_segments = []
-    hidden_loop_segments = []
-    for elli, ell in enumerate(self.shine_parent.loop_displayer.loops):
-      if ell.show.get() == 0:
-        continue
-      visible_loop_segments.append([elli, []])
-      hidden_loop_segments.append([elli, []])
-      V = [self.shine_parent.ES.along_edge(ell.EP.edges[i].ind, ell.EP.edge_coords[i]) for i in xrange(len(ell.EP.edges))]
-      V = [self.draw_transformation(v) for v in V]
-      lep = len(ell.EP.edges)
-      for i,ei in enumerate(ell.EP.edges):
-        seg =  [V[i], V[(i+1)%lep]] 
-        if (seg[1]-seg[0]).norm() < 1e-10:
-          continue
-        Ti_near_segment, unused_segments = self.draw_viewer.viewer_grid_near_segment( seg )
-        visible_subsegments = self.draw_viewer.visible_subsegments_t_values(seg, [T_visible_only[i] for i in Ti_near_segment])
-        if visible_subsegments == None:
-          hidden_loop_segments[-1][-1].append( seg )
-          continue
-        visible_subsegments.sort()
-        previous_end_t = 0
-        for vss in visible_subsegments:
-          if vss[0]-previous_end_t > 1e-10:
-            hidden_seg = [R3.along_segment(seg, previous_end_t), R3.along_segment(seg, vss[0])]
-            hidden_loop_segments[-1][-1].append( hidden_seg )
-          visible_seg = [R3.along_segment(seg, vss[0]), R3.along_segment(seg, vss[1])]
-          visible_loop_segments[-1][-1].append(visible_seg)
-          previous_end_t = vss[1]
-        if 1-previous_end_t > 1e-10:
-          hidden_seg = [R3.along_segment(seg, previous_end_t), R3.along_segment(seg, 1.0)]
-          hidden_loop_segments[-1][-1].append( hidden_seg )
-          
-    ### done finding the segments for the loops
     
-    # draw all the triangles
-    triangle_outline = ('black' if self.draw_do_mesh.get()==1 else '')
-    triangle_shading = (self.draw_do_shading.get()==1)
-    for i in xrange(len(T_projected)):
-      pt, am = T_projected[i]
-      canvas_coords = [self.draw_plane_to_canvas(x) for x in pt]
-      flat_coord_list = [x for p in canvas_coords for x in p]
-      grayscale = int(128*(am+1))
-      rgb = ('#%02x%02x%02x' % (grayscale, grayscale, grayscale) if triangle_shading else '')
-      #print "Drawing triangle: ", canvas_coords
-      #print "Amount: ", rgb
-      di = self.canvas.create_polygon(*flat_coord_list, fill=rgb, outline=triangle_outline)
-      self.drawing_items.append(di)
     
-    #Draw the hidden loop segments
-    for elli, segs in hidden_loop_segments:
-      col = whiten_color(self.shine_parent.loop_displayer.loops[elli].color)
-      for s in segs:
-        cp = [self.draw_plane_to_canvas(self.draw_viewer.project_point(s[0])), \
-              self.draw_plane_to_canvas(self.draw_viewer.project_point(s[1]))]
-        coords = [x for v in cp for x in v]
-        di = self.canvas.create_line(*coords, width=3, fill=col)
-        self.drawing_items.append(di)
-    
-    #draw the boundary
-    for VS in visible_segments:
-      v1, v2 = VS
-      v1p, v2p = map(self.draw_viewer.project_point, [v1, v2])
-      dv1 = self.draw_plane_to_canvas(v1p)
-      dv2 = self.draw_plane_to_canvas(v2p)
-      coords = [x for v in [dv1,dv2] for x in v]
-      di = self.canvas.create_line(*coords, width=3, fill='#000000') 
-      self.drawing_items.append(di)
-    
-    #draw the visible loop segments
-    for elli, segs in visible_loop_segments:
-      col = self.shine_parent.loop_displayer.loops[elli].color
-      for s in segs:
-        cp = [self.draw_plane_to_canvas(self.draw_viewer.project_point(s[0])), \
-              self.draw_plane_to_canvas(self.draw_viewer.project_point(s[1]))]
-        coords = [x for v in cp for x in v]
-        di = self.canvas.create_line(*coords, width=3, fill=col)
-        self.drawing_items.append(di)
   
-  ##############################end of canvas_redraw
-
+  ########################################################################
+  # rotate the surface
+  ########################################################################
   def rotate(self, dir):
     if dir == 'vert_ccw' or dir == 'vert_cw':
       ang = (math.pi/12 if dir=='vert_ccw' else -math.pi/12)
@@ -837,6 +910,10 @@ class ShineEmSurfDisplay:
                                             [0, math.sin(ang), math.cos(ang)]])*self.draw_transformation
     self.canvas_redraw()
   
+  #######################################################################
+  # this computes the sum of the squares of the difference between the 
+  # euclidean and hyeprbolic lengths of the edges
+  #######################################################################
   def triangle_deviation(self, i):
     embedded_lengths = [ (self.shine_parent.ES.em_t[i][(j+1)%3] - self.shine_parent.ES.em_t[i][j]).norm() for j in xrange(3) ]
     hyp_lengths = [ self.shine_parent.GS.h_tris[i].lengths[j] for j in xrange(3) ]
@@ -849,7 +926,86 @@ class ShineEmSurfDisplay:
     #self.draw_viewer.zoom( (0.1 if dir=='in' else 1.1) )
     self.draw_plane_to_canvas_scale = self.draw_plane_to_canvas_scale * (0.9 if dir=='out' else 1.1)
     self.canvas_redraw()
-
+  
+  ##########################################################################
+  # write out an svg 
+  ##########################################################################
+  def write_svg(self, filename, surface_outline=True, surface_mesh_mesh=False, surface_mesh_shading=True, surface_mesh_outline=True, surface_outline_smooth=True, loop_smooth=True):
+    f = open(filename, 'w')
+    f.write('<svg width="' + str(self.canvas_width) + '" height="' + str(self.canvas_height) + '">\n')
+    # draw all the triangles
+    if not surface_outline:
+      for t in self.drawing_visible_triangles:
+        pt, am = self.draw_viewer.project_triangle(t)
+        canvas_coords = [self.draw_plane_to_canvas(x) for x in pt]
+        SVG_d = 'M ' + str(canvas_coords[0][0]) + ' ' + str(canvas_coords[0][1])
+        for i in xrange(1,3):
+          SVG_d += ' L ' + str(canvas_coords[i][0]) + ' ' + str(canvas_coords[i][1])
+        SVG_d += ' z'
+        SVG_command = '<path d="' + SVG_d + '"'
+        if surface_mesh_mesh:
+          SVG_command += ' stroke="black" stroke-width="1" stroke-linejoin="round"'
+        else:
+          SVG_command += ' stroke="none"'
+        if surface_mesh_shading:
+          grayscale = int(128*(am+1))
+          rgb = '#%02x%02x%02x' % (grayscale, grayscale, grayscale)
+          SVG_command += ' fill="' + rgb + '"'
+        else:
+          SVG_command += ' fill="none"'
+        SVG_command += '/>\n'
+        f.write(SVG_command)
+    
+    #Draw the hidden loop segments
+    for ell in self.shine_parent.loop_displayer.loops:
+      if ell.show.get() == 0:
+        continue
+      for kind, pp in ell.PPs:
+        if kind == 'visible':
+          continue
+        col = whiten_color(ell.color)
+        projected_v = [self.draw_plane_to_canvas(self.draw_viewer.project_point(v)) for v in pp.L]
+        SVG_d = 'M ' + str(projected_v[0][0]) + ' ' + str(projected_v[0][1])
+        for i in xrange(1,len(projected_v)):
+          SVG_d += ' L ' + str(projected_v[i][0]) + ' ' + str(projected_v[i][1])
+        SVG_command = '<path d="' + SVG_d + '" stroke="' + col + '" stroke-width="3" stroke-linejoin="round" fill="none"/>\n'
+        f.write(SVG_command)
+    
+    #draw the boundary
+    if surface_outline or surface_mesh_outline:
+      for be in self.drawing_boundary:
+        #print "Drawing ", be
+        col = '#000000' #rand_bright_color()
+        projected_v = [self.draw_plane_to_canvas(self.draw_viewer.project_point(v)) for v in  be.L]
+        SVG_d = 'M ' + str(projected_v[0][0]) + ' ' + str(projected_v[0][1])
+        for i in xrange(1,len(projected_v)):
+          SVG_d += ' L ' + str(projected_v[i][0]) + ' ' + str(projected_v[i][1])
+        SVG_command = '<path d="' + SVG_d + '" stroke="' + col + '" stroke-width="3" stroke-linejoin="round" fill="none"/>\n'
+        f.write(SVG_command)
+    
+    #draw the visible loop segments
+    for ell in self.shine_parent.loop_displayer.loops:
+      if ell.show.get() == 0:
+        continue
+      for kind, pp in ell.PPs:
+        if kind == 'hidden':
+          continue
+        col = ell.color
+        projected_v = [self.draw_plane_to_canvas(self.draw_viewer.project_point(v)) for v in pp.L]
+        SVG_d = 'M ' + str(projected_v[0][0]) + ' ' + str(projected_v[0][1])
+        for i in xrange(1,len(projected_v)):
+          SVG_d += ' L ' + str(projected_v[i][0]) + ' ' + str(projected_v[i][1])
+        SVG_command = '<path d="' + SVG_d + '" stroke="' + col + '" stroke-width="3" stroke-linejoin="round" fill="none"/>\n'
+        f.write(SVG_command)
+    
+    f.write('</svg>\n')
+    f.close()
+  
+  
+  
+  
+  
+  
 ###########################################################################
 # the list of loops
 ###########################################################################
@@ -945,6 +1101,7 @@ class ShineLoop:
     self.shine_main = shine_parent.shine_parent
     
     self.EP = EP
+    self.PPs = None
     self.word = word
     self.color = '#000000'
     
@@ -980,7 +1137,76 @@ class ShineLoop:
     if self.shine_main.liftedsurf_displayer != None:
       self.shine_main.liftedsurf_displayer.canvas_redraw()
     
+  ########################################################################
+  # recompute the polygonal paths; this assumes that the shine_main 
+  # triangles and draw viewer are current
+  ########################################################################
+  def recompute_drawing(self):
+    self.PPs = []
+    T = self.shine_main.emsurf_displayer.drawing_visible_triangles
     
+    V = [self.shine_main.ES.along_edge(self.EP.edges[i].ind, self.EP.edge_coords[i]) for i in xrange(len(self.EP.edges))]
+    V = [self.shine_main.emsurf_displayer.draw_transformation(v) for v in V]
+    while (V[0]-V[-1]).norm() < 1e-10:
+      del V[-1]
+    i=0
+    while i<len(V)-1:
+      if (V[i+1]-V[i]).norm() < 1e-10:
+        del V[i+1]
+      else:
+        i += 1
+    lv = len(V)
+    visible_V = lv*[None]
+    for i,v in enumerate(V):
+      Ti_near_point, unused_segments = self.shine_main.emsurf_displayer.draw_viewer.viewer_grid_near_point(v)
+      visible_V[i] = (not self.shine_main.emsurf_displayer.draw_viewer.is_point_hidden([T[j] for j in Ti_near_point], v))
+    #go until we first hit a gap between a hidden and non-hidden vertex
+    first_vert = 0
+    while first_vert < lv and (visible_V[first_vert] or not visible_V[(first_vert+1)%lv]):
+      first_vert += 1
+    if first_vert == lv:
+      #there's no such gap
+      if visible_V[0]:
+        self.PPs.append( ['visible', R3.PolygonalPath(V)] )
+      else:
+        self.PPs.append( ['hidden', R3.PolygonalPath(V)] )
+    fvp1 = (first_vert+1)%lv
+    seg = [V[first_vert], V[fvp1]]
+    Ti_near_segment, unused_segments = self.shine_main.emsurf_displayer.draw_viewer.viewer_grid_near_segment( seg )
+    visible_subsegments = self.shine_main.emsurf_displayer.draw_viewer.visible_subsegments_t_values(seg, [T[i] for i in Ti_near_segment])
+    if visible_subsegments == None:
+      current_path = [R3.along_segment(seg, 1.0)]
+    else:
+      if len(visible_subsegments) != 1:
+        raise ValueError("Wrong number of visible subsegments?")
+      current_path = R3.subsegment_from_t_values(seg, visible_subsegments[0])   
+    currently_visible = True
+    current_vert = fvp1
+    while True:
+      cvp1 = (current_vert+1)%lv
+      if visible_V[cvp1] != currently_visible:
+        seg = [V[current_vert], V[cvp1]]
+        Ti_near_segment, unused_segments = self.shine_main.emsurf_displayer.draw_viewer.viewer_grid_near_segment( seg )
+        visible_subsegments = self.shine_main.emsurf_displayer.draw_viewer.visible_subsegments_t_values(seg, [T[i] for i in Ti_near_segment])
+        if visible_subsegments == None:
+          t_cut_point = (0.0 if currently_visible else 1.0)
+        else:
+          if len(visible_subsegments) != 1:
+            raise ValueError("Wrong number of visible subsegments?")
+          t_cut_point = (visible_subsegments[0][1] if currently_visible else visible_subsegments[0][0])
+        current_path.append( R3.along_segment(seg, t_cut_point) )
+        self.PPs.append( [ ('visible' if currently_visible else 'hidden'), R3.PolygonalPath(current_path) ] )
+        if cvp1 == fvp1:
+          break
+        current_path = R3.subsegment_from_t_values(seg, [t_cut_point,1.0])
+        currently_visible = visible_V[cvp1]
+      else:
+        current_path.append( V[cvp1] )
+      current_vert = cvp1
+    #print "Loop paths:"
+    #for pp in self.PPs:
+    #  print pp
+          
     
 ############################################################################
 # a hyperbolic lifted surface displayer

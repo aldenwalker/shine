@@ -15,6 +15,9 @@ def segment_intersect_plane_t_value(s, pt, n):
     return None
   return (pt.dot(n) - s[0].dot(n)) / dn
 
+def subsegment_from_t_values(s, T):
+  return [along_segment(s, T[0]), along_segment(s, T[1])]
+
 def remove_duplicate_floats(L):
   """removes duplicate floats in a list -- it assumes they are sorted"""
   i = 0
@@ -85,6 +88,18 @@ class Matrix:
     return Vector( [ sum([self.M[i][j]*x[j] for j in xrange(len(x))]) for i in xrange(len(self.M))] )
   def __mul__(self, other):
     return Matrix( [ [ sum([self.M[i][k]*other.M[k][j] for k in xrange(len(self.M[0]))]) for j in xrange(len(other.M[0]))] for i in xrange(len(self.M))])
+
+
+
+
+class PolygonalPath:
+  def __init__(self, L):
+    self.L = list(L)
+  def __str__(self):
+    return repr(self)
+  def __repr__(self):
+    return str(self.L)
+
 
 
 class ProjectionViewer:
