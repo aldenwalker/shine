@@ -241,11 +241,11 @@ def bezier_approximation(pts):
   n_needed = 10*num_breakpoints + 10
   cut_number = int(n_needed / float(n))+1
   new_pts = []
-  for i in xrange(n):
-    ip1 = (i+1)%n
+  for i in xrange(n-1):
     for j in xrange(cut_number):
       t = j/float(cut_number)
-      new_pts.append( pts[i]*(1-t) + pts[ip1]*t )
+      new_pts.append( pts[i]*(1-t) + pts[i+1]*t )
+  new_pts.append( pts[-1] )
   print "total angle:", total_angle
   print "num breakpoints:", num_breakpoints
   print "n_needed:", n_needed
