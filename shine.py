@@ -3,6 +3,7 @@ import tsurf
 import gsurf
 import emsurf
 import mobius
+import R2
 import R3
 from signedind import SignedInd as SI
 
@@ -932,6 +933,9 @@ class ShineEmSurfDisplay:
   ##########################################################################
   def write_svg(self, filename, surface_outline=True, surface_mesh_mesh=False, surface_mesh_shading=True, surface_mesh_outline=True, surface_outline_smooth=True, loop_smooth=True):
     f = open(filename, 'w')
+    f.write('<?xml version="1.0"?>\n')
+    f.write('<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.0//EN"\n')
+    f.write('"http://www.w3.org/TR/2001/REC-SVG-20010904/DTD/svg10.dtd">\n')
     f.write('<svg width="' + str(self.canvas_width) + '" height="' + str(self.canvas_height) + '">\n')
     # draw all the triangles
     if not surface_outline:
@@ -965,9 +969,21 @@ class ShineEmSurfDisplay:
           continue
         col = whiten_color(ell.color)
         projected_v = [self.draw_plane_to_canvas(self.draw_viewer.project_point(v)) for v in pp.L]
-        SVG_d = 'M ' + str(projected_v[0][0]) + ' ' + str(projected_v[0][1])
-        for i in xrange(1,len(projected_v)):
-          SVG_d += ' L ' + str(projected_v[i][0]) + ' ' + str(projected_v[i][1])
+        if loop_smooth:
+          bp = R2.bezier_approximation([R2.Vector(v) for v in projected_v])
+          print "Doing hidden part; got ", len(bp), "breakpoints"
+          p1, cp1, cp2, p2 = bp[0]
+          SVG_d = 'M ' + str(p1[0]) + ' ' + str(p1[1]) + \
+                  ' C ' + str(cp1[0]) + ' ' + str(cp1[1]) + ' ' +\
+                          str(cp2[0]) + ' ' + str(cp2[1]) + ' ' +\
+                          str(p2[0]) + ' ' + str(p2[1])
+          for i in xrange(1,len(bp)):
+            p1, cp1, cp2, p2 = bp[i]
+            SVG_d += ' S ' + ' '.join(map(str, [cp2[0], cp2[1], p2[0], p2[1]]))
+        else:
+          SVG_d = 'M ' + str(projected_v[0][0]) + ' ' + str(projected_v[0][1])
+          for i in xrange(1,len(projected_v)):
+            SVG_d += ' L ' + str(projected_v[i][0]) + ' ' + str(projected_v[i][1])
         SVG_command = '<path d="' + SVG_d + '" stroke="' + col + '" stroke-width="3" stroke-linejoin="round" fill="none"/>\n'
         f.write(SVG_command)
     
@@ -977,9 +993,12 @@ class ShineEmSurfDisplay:
         #print "Drawing ", be
         col = '#000000' #rand_bright_color()
         projected_v = [self.draw_plane_to_canvas(self.draw_viewer.project_point(v)) for v in  be.L]
-        SVG_d = 'M ' + str(projected_v[0][0]) + ' ' + str(projected_v[0][1])
-        for i in xrange(1,len(projected_v)):
-          SVG_d += ' L ' + str(projected_v[i][0]) + ' ' + str(projected_v[i][1])
+        if surface_outline and surface_outline_smooth:
+          projected_v = R2.bezier_approximation([R2.Vector(v) for v in projected_v])
+        else:
+          SVG_d = 'M ' + str(projected_v[0][0]) + ' ' + str(projected_v[0][1])
+          for i in xrange(1,len(projected_v)):
+            SVG_d += ' L ' + str(projected_v[i][0]) + ' ' + str(projected_v[i][1])
         SVG_command = '<path d="' + SVG_d + '" stroke="' + col + '" stroke-width="3" stroke-linejoin="round" fill="none"/>\n'
         f.write(SVG_command)
     
@@ -992,9 +1011,21 @@ class ShineEmSurfDisplay:
           continue
         col = ell.color
         projected_v = [self.draw_plane_to_canvas(self.draw_viewer.project_point(v)) for v in pp.L]
-        SVG_d = 'M ' + str(projected_v[0][0]) + ' ' + str(projected_v[0][1])
-        for i in xrange(1,len(projected_v)):
-          SVG_d += ' L ' + str(projected_v[i][0]) + ' ' + str(projected_v[i][1])
+        if loop_smooth:
+          bp = R2.bezier_approximation([R2.Vector(v) for v in projected_v])
+          print "Doing visible loop; got ", len(bp), "breakpoints"
+          p1, cp1, cp2, p2 = bp[0]
+          SVG_d = 'M ' + str(p1[0]) + ' ' + str(p1[1]) + \
+                  ' C ' + str(cp1[0]) + ' ' + str(cp1[1]) + ' ' +\
+                          str(cp2[0]) + ' ' + str(cp2[1]) + ' ' +\
+                          str(p2[0]) + ' ' + str(p2[1])
+          for i in xrange(1,len(bp)):
+            p1, cp1, cp2, p2 = bp[i]
+            SVG_d += ' S ' + ' '.join(map(str, [cp2[0], cp2[1], p2[0], p2[1]]))
+        else:
+          SVG_d = 'M ' + str(projected_v[0][0]) + ' ' + str(projected_v[0][1])
+          for i in xrange(1,len(projected_v)):
+            SVG_d += ' L ' + str(projected_v[i][0]) + ' ' + str(projected_v[i][1])
         SVG_command = '<path d="' + SVG_d + '" stroke="' + col + '" stroke-width="3" stroke-linejoin="round" fill="none"/>\n'
         f.write(SVG_command)
     
