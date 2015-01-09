@@ -160,9 +160,9 @@ def fit_polybezier(pts, num_breakpoints=None):
   #we'll have to provide a scaled t values for each point
   M = [M_cols * [0] for i in xrange(n-2)]
   RHS = [ [0,0] for i in xrange(n-2)]
-  print "n:",n
-  print "num_breakpoints:",num_breakpoints
-  print "distance_per_curve:",distance_per_curve
+  #print "n:",n
+  #print "num_breakpoints:",num_breakpoints
+  #print "distance_per_curve:",distance_per_curve
   for i in xrange(1,n-1):
     this_point_dist = float(i)
     breakpoint_index = int(this_point_dist / distance_per_curve)
@@ -171,9 +171,9 @@ def fit_polybezier(pts, num_breakpoints=None):
     curve_start_dist = breakpoint_index*distance_per_curve
     t = (this_point_dist - curve_start_dist) / distance_per_curve
     row_ind = i-1
-    print "Doing point index ", i
-    print "t value:", t
-    print "breakpoint index:", breakpoint_index
+    #print "Doing point index ", i
+    #print "t value:", t
+    #print "breakpoint index:", breakpoint_index
     if breakpoint_index == 0:
       M[row_ind][0] = 3*(1-t)**2*t
       M[row_ind][1] = 3*(1-t)*t**2
@@ -200,9 +200,9 @@ def fit_polybezier(pts, num_breakpoints=None):
   M = np.matrix(M)
   RHS = np.matrix(RHS)
   MT = M.getT()
-  print M
-  print RHS
-  print MT*M
+  #print M
+  #print RHS
+  #print MT*M
   ans = (MT*M).getI()*MT*RHS
   ans = ans.tolist()
   points = [[pts[0], Vector(ans[0])] ]
@@ -236,9 +236,9 @@ def bezier_approximation(pts):
     return fit_polybezier(pts)
   total_angle = sum([(pts[i]-pts[i-1]).angle(pts[i+1]-pts[i]) for i in xrange(1,n-1)])
   #each pi of angle should give about one breakpoint
-  num_breakpoints = 2*(int(total_angle / math.pi)+1)
+  num_breakpoints = int(1.5*(total_angle / math.pi)+1)
   #each breakpoint should have about 10 points
-  n_needed = 10*num_breakpoints + 10
+  n_needed = 8*num_breakpoints + 8
   cut_number = int(n_needed / float(n))+1
   new_pts = []
   for i in xrange(n-1):
@@ -246,11 +246,11 @@ def bezier_approximation(pts):
       t = j/float(cut_number)
       new_pts.append( pts[i]*(1-t) + pts[i+1]*t )
   new_pts.append( pts[-1] )
-  print "total angle:", total_angle
-  print "num breakpoints:", num_breakpoints
-  print "n_needed:", n_needed
-  print "n now:", n
-  print "cut number:", cut_number
+  #print "total angle:", total_angle
+  #print "num breakpoints:", num_breakpoints
+  #print "n_needed:", n_needed
+  #print "n now:", n
+  #print "cut number:", cut_number
   return fit_polybezier(new_pts, num_breakpoints=num_breakpoints)
   
   

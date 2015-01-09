@@ -30,11 +30,18 @@ def whiten_color(col):
   c1 = int(col[1:3], 16)
   c2 = int(col[3:5], 16)
   c3 = int(col[5:7], 16)
-  c1 = c1 + int((255-c1)/1.2)
-  c2 = c2 + int((255-c2)/1.2)
-  c3 = c3 + int((255-c3)/1.2)
+  c1 = c1 + int((255-c1)/1.5)
+  c2 = c2 + int((255-c2)/1.5)
+  c3 = c3 + int((255-c3)/1.5)
   return '#%02x%02x%02x' % (c1, c2, c3)
-  
+
+def get_rgb_01(s):
+  """get rgb 01 values from a string"""
+  c1 = int(s[1:3], 16)
+  c2 = int(s[3:5], 16)
+  c3 = int(s[5:7], 16)
+  return [float(x)/256 for x in [c1,c2,c3]]
+
 def remove_duplicate_floats(L):
   """removes duplicate floats in a list -- it assumes they are sorted"""
   i = 0
@@ -548,9 +555,16 @@ class Shine:
     dialog.grab_set()
     
     export_as = tk.StringVar()
-    export_as.set('svg')
-    W_export_as_label = tk.Label(dialog, text='Export as:')
-    W_export_svg = tk.Radiobutton(dialog, text='svg', variable=export_as, value='svg')
+    export_as.set('eps')
+    W_export_as_frame = tk.Frame(dialog)
+    W_export_as_label = tk.Label(W_export_as_frame, text='Export as:')
+    W_export_svg = tk.Radiobutton(W_export_as_frame, text='svg', variable=export_as, value='svg')
+    W_export_eps = tk.Radiobutton(W_export_as_frame, text='eps', variable=export_as, value='eps')
+    W_export_as_label.grid(row=0,column=0)
+    W_export_eps.grid(row=0,column=1)
+    W_export_svg.grid(row=0,column=2)
+    
+    
     W_surface_option_frame = tk.LabelFrame(dialog, text='Surface options')
     surface_outline = tk.IntVar()
     surface_outline.set(0)
@@ -590,12 +604,13 @@ class Shine:
     
     W_loop_smooth.grid(row=0, column=0)
     
-    dialog.rowconfigure(0, weight=1)
+    dialog.rowconfigure(2, weight=1)
     dialog.columnconfigure(0, weight=1)
     dialog.columnconfigure(1, weight=1)
     
-    W_surface_option_frame.grid(row=0, column=0, sticky=tk.N+tk.E+tk.S+tk.W)
-    W_loop_option_frame.grid(row=0, column=1, sticky=tk.N+tk.E+tk.S+tk.W)
+    W_export_as_frame.grid(row=0, column=0, sticky=tk.W)
+    W_surface_option_frame.grid(row=1, column=0, sticky=tk.N+tk.E+tk.S+tk.W)
+    W_loop_option_frame.grid(row=1, column=1, sticky=tk.N+tk.E+tk.S+tk.W)
     
     OK = tk.IntVar()
     OK.set(0)
@@ -606,8 +621,8 @@ class Shine:
     W_OK = tk.Button(dialog, text='OK', command=ok)
     W_cancel = tk.Button(dialog, text='Cancel', command=dialog.destroy)
     
-    W_OK.grid(row=1, column=0)
-    W_cancel.grid(row=1, column=1)
+    W_OK.grid(row=2, column=0)
+    W_cancel.grid(row=2, column=1)
     
     dialog.wait_window(dialog)
     
@@ -616,12 +631,14 @@ class Shine:
     
     filename = tkFileDialog.asksaveasfilename(parent=self.parent)
     
-    self.emsurf_displayer.write_svg(filename, surface_outline=(surface_outline.get()==1), \
-                                              surface_mesh_mesh=(surface_mesh_mesh.get()==1), \
-                                              surface_mesh_shading=(surface_mesh_shading.get()==1), \
-                                              surface_mesh_outline=(surface_mesh_outline.get()==1), \
-                                              surface_outline_smooth=(surface_outline_smooth.get()==1), \
-                                              loop_smooth=(loop_smooth.get()==1))
+    f = (self.emsurf_displayer.write_svg if export_as.get() == 'svg' else self.emsurf_displayer.write_eps)
+    
+    f(filename, surface_outline=(surface_outline.get()==1), \
+                                 surface_mesh_mesh=(surface_mesh_mesh.get()==1), \
+                                 surface_mesh_shading=(surface_mesh_shading.get()==1), \
+                                 surface_mesh_outline=(surface_mesh_outline.get()==1), \
+                                 surface_outline_smooth=(surface_outline_smooth.get()==1), \
+                                 loop_smooth=(loop_smooth.get()==1))
     
     
 
@@ -931,7 +948,12 @@ class ShineEmSurfDisplay:
   ##########################################################################
   # write out an svg 
   ##########################################################################
-  def write_svg(self, filename, surface_outline=True, surface_mesh_mesh=False, surface_mesh_shading=True, surface_mesh_outline=True, surface_outline_smooth=True, loop_smooth=True):
+  def write_svg(self, filename, surface_outline=True, \
+                                surface_mesh_mesh=False, \
+                                surface_mesh_shading=True, \
+                                surface_mesh_outline=True, \
+                                surface_outline_smooth=True, \
+                                loop_smooth=True):
     f = open(filename, 'w')
     f.write('<?xml version="1.0"?>\n')
     f.write('<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.0//EN"\n')
@@ -971,7 +993,7 @@ class ShineEmSurfDisplay:
         projected_v = [self.draw_plane_to_canvas(self.draw_viewer.project_point(v)) for v in pp.L]
         if loop_smooth:
           bp = R2.bezier_approximation([R2.Vector(v) for v in projected_v])
-          print "Doing hidden part; got ", len(bp), "breakpoints"
+          #print "Doing hidden part; got ", len(bp), "breakpoints"
           p1, cp1, cp2, p2 = bp[0]
           SVG_d = 'M ' + str(p1[0]) + ' ' + str(p1[1]) + \
                   ' C ' + str(cp1[0]) + ' ' + str(cp1[1]) + ' ' +\
@@ -994,7 +1016,16 @@ class ShineEmSurfDisplay:
         col = '#000000' #rand_bright_color()
         projected_v = [self.draw_plane_to_canvas(self.draw_viewer.project_point(v)) for v in  be.L]
         if surface_outline and surface_outline_smooth:
-          projected_v = R2.bezier_approximation([R2.Vector(v) for v in projected_v])
+          bp = R2.bezier_approximation([R2.Vector(v) for v in projected_v])
+          #print "Doing boundary part; got ", len(bp), "breakpoints"
+          p1, cp1, cp2, p2 = bp[0]
+          SVG_d = 'M ' + str(p1[0]) + ' ' + str(p1[1]) + \
+                  ' C ' + str(cp1[0]) + ' ' + str(cp1[1]) + ' ' +\
+                          str(cp2[0]) + ' ' + str(cp2[1]) + ' ' +\
+                          str(p2[0]) + ' ' + str(p2[1])
+          for i in xrange(1,len(bp)):
+            p1, cp1, cp2, p2 = bp[i]
+            SVG_d += ' S ' + ' '.join(map(str, [cp2[0], cp2[1], p2[0], p2[1]]))
         else:
           SVG_d = 'M ' + str(projected_v[0][0]) + ' ' + str(projected_v[0][1])
           for i in xrange(1,len(projected_v)):
@@ -1013,7 +1044,7 @@ class ShineEmSurfDisplay:
         projected_v = [self.draw_plane_to_canvas(self.draw_viewer.project_point(v)) for v in pp.L]
         if loop_smooth:
           bp = R2.bezier_approximation([R2.Vector(v) for v in projected_v])
-          print "Doing visible loop; got ", len(bp), "breakpoints"
+          #print "Doing visible loop; got ", len(bp), "breakpoints"
           p1, cp1, cp2, p2 = bp[0]
           SVG_d = 'M ' + str(p1[0]) + ' ' + str(p1[1]) + \
                   ' C ' + str(cp1[0]) + ' ' + str(cp1[1]) + ' ' +\
@@ -1033,6 +1064,118 @@ class ShineEmSurfDisplay:
     f.close()
   
   
+  #########################################################################
+  # write out an eps
+  #########################################################################
+  def write_eps(self, filename, surface_outline=True, \
+                                surface_mesh_mesh=False, \
+                                surface_mesh_shading=True, \
+                                surface_mesh_outline=True, \
+                                surface_outline_smooth=True, \
+                                loop_smooth=True):
+    f = open(filename, 'w')
+    f.write('%!PS-Adobe-2.0 EPSF-2.0\n')
+    f.write('%%BoundingBox: ' + str(0) + ' ' +str(0) + ' ' + str(self.canvas_width) + ' ' + str(self.canvas_height) + '\n')
+    f.write('1 setlinejoin\n')
+    
+    h = self.canvas_height
+    
+    # draw all the triangles
+    if (not surface_outline) and (surface_mesh_mesh or surface_mesh_shading):
+      for t in self.drawing_visible_triangles:
+        pt, am = self.draw_viewer.project_triangle(t)
+        canvas_coords = [self.draw_plane_to_canvas(x) for x in pt]
+        EPS_com = str(canvas_coords[0][0]) + ' ' + str(h-canvas_coords[0][1]) + ' moveto\n'
+        for i in xrange(1,3):
+          EPS_com += str(canvas_coords[i][0]) + ' ' + str(h-canvas_coords[i][1]) + ' lineto\n'
+        EPS_com += 'closepath\n'
+        if surface_mesh_mesh and surface_mesh_shading:
+          EPS_com += 'gsave\n'
+        if surface_mesh_mesh:
+          EPS_com += '0 0 0 setrgbcolor\n'
+          EPS_com += 'stroke\n'
+        if surface_mesh_shading:
+          if surface_mesh_mesh:
+            EPS_com += 'grestore\n'
+          grayscale = 0.5*(am+1)
+          EPS_com += str(grayscale) + ' ' + str(grayscale) + ' ' + str(grayscale) + ' setrgbcolor\n'
+          EPS_com += 'fill\n'
+        f.write(EPS_com)
+    
+    #Draw the hidden loop segments
+    for ell in self.shine_parent.loop_displayer.loops:
+      if ell.show.get() == 0:
+        continue
+      col = get_rgb_01(whiten_color(ell.color))
+      f.write(str(col[0]) + ' ' + str(col[1]) + ' ' + str(col[2]) + ' setrgbcolor\n')
+      for kind, pp in ell.PPs:
+        if kind == 'visible':
+          continue
+        projected_v = [self.draw_plane_to_canvas(self.draw_viewer.project_point(v)) for v in pp.L]
+        if loop_smooth:
+          bp = R2.bezier_approximation([R2.Vector(v) for v in projected_v])
+          p1, cp1, cp2, p2 = bp[0]
+          EPS_com = str(p1[0]) + ' ' + str(h-p1[1]) + ' moveto\n'
+          EPS_com += ' '.join(map(str, [cp1[0], h-cp1[1], cp2[0], h-cp2[1], p2[0], h-p2[1]])) + ' curveto\n'
+          for i in xrange(1,len(bp)):
+            p1, cp1, cp2, p2 = bp[i]
+            EPS_com +=  ' '.join(map(str, [cp1[0], h-cp1[1], cp2[0], h-cp2[1], p2[0], h-p2[1]])) + ' curveto\n'
+        else:
+          EPS_com = str(projected_v[0][0]) + ' ' + str(h-projected_v[0][1]) + ' moveto\n'
+          for i in xrange(1,len(projected_v)):
+            EPS_com += str(projected_v[i][0]) + ' ' + str(h-projected_v[i][1]) + ' lineto\n'
+        EPS_com += 'stroke\n'
+        f.write(EPS_com)
+    
+    #draw the boundary
+    if surface_outline or surface_mesh_outline:
+      for be in self.drawing_boundary:
+        #print "Drawing ", be
+        f.write('0 0 0 setrgbcolor\n')
+        projected_v = [self.draw_plane_to_canvas(self.draw_viewer.project_point(v)) for v in  be.L]
+        if surface_outline and surface_outline_smooth:
+          bp = R2.bezier_approximation([R2.Vector(v) for v in projected_v])
+          p1, cp1, cp2, p2 = bp[0]
+          EPS_com = str(p1[0]) + ' ' + str(h-p1[1]) + ' moveto\n'
+          EPS_com += ' '.join(map(str, [cp1[0], h-cp1[1], cp2[0], h-cp2[1], p2[0], h-p2[1]])) + ' curveto\n'
+          for i in xrange(1,len(bp)):
+            p1, cp1, cp2, p2 = bp[i]
+            EPS_com +=  ' '.join(map(str, [cp1[0], h-cp1[1], cp2[0], h-cp2[1], p2[0], h-p2[1]])) + ' curveto\n'
+        else:
+          EPS_com = str(projected_v[0][0]) + ' ' + str(h-projected_v[0][1]) + ' moveto\n'
+          for i in xrange(1,len(projected_v)):
+            EPS_com += str(projected_v[i][0]) + ' ' + str(h-projected_v[i][1]) + ' lineto\n'
+        EPS_com += 'stroke\n'
+        f.write(EPS_com)
+    
+    #draw the visible loop segments
+    for ell in self.shine_parent.loop_displayer.loops:
+      if ell.show.get() == 0:
+        continue
+      col = get_rgb_01(ell.color)
+      f.write(str(col[0]) + ' ' + str(col[1]) + ' ' + str(col[2]) + ' setrgbcolor\n')
+      for kind, pp in ell.PPs:
+        if kind == 'hidden':
+          continue
+        col = ell.color
+        projected_v = [self.draw_plane_to_canvas(self.draw_viewer.project_point(v)) for v in pp.L]
+        if loop_smooth:
+          bp = R2.bezier_approximation([R2.Vector(v) for v in projected_v])
+          p1, cp1, cp2, p2 = bp[0]
+          EPS_com = str(p1[0]) + ' ' + str(h-p1[1]) + ' moveto\n'
+          EPS_com += ' '.join(map(str, [cp1[0], h-cp1[1], cp2[0], h-cp2[1], p2[0], h-p2[1]])) + ' curveto\n'
+          for i in xrange(1,len(bp)):
+            p1, cp1, cp2, p2 = bp[i]
+            EPS_com +=  ' '.join(map(str, [cp1[0], h-cp1[1], cp2[0], h-cp2[1], p2[0], h-p2[1]])) + ' curveto\n'
+        else:
+          EPS_com = str(projected_v[0][0]) + ' ' + str(h-projected_v[0][1]) + ' moveto\n'
+          for i in xrange(1,len(projected_v)):
+            EPS_com += str(projected_v[i][0]) + ' ' + str(h-projected_v[i][1]) + ' lineto\n'
+        EPS_com += 'stroke\n'
+        f.write(EPS_com)
+    
+    f.write('\n')
+    f.close()
   
   
   

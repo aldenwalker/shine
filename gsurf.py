@@ -2,6 +2,7 @@ import math
 import random
 import scipy.optimize
 import copy
+import sys
 
 import hyp
 import mobius
@@ -236,6 +237,8 @@ class GeometricSurface(tsurf.TopSurface):
       #print "Default pathing topological path"
       EP = emsurf.EmbeddedPath.from_topological_path(new_TP)
     
+    print ""
+    
     #for each edge, do the following:
     # - simplify the loop (remove edge followed by opposite edge)
     # - find a location at which there is a nonzero angle (if there 
@@ -325,11 +328,13 @@ class GeometricSurface(tsurf.TopSurface):
         current_EP_index = 0
         #check to see if we are done
         mad = self.maximal_angle_deviation(EP)
-        print "Maximum angle deviation:", mad
+        print "\rMaximum angle deviation:", mad,
+        sys.stdout.flush()
         if mad < tol:
           break
         
     #########
+    print ""
     return EP
   
   #########################################################################
