@@ -69,18 +69,22 @@ class PlanarGraph:
     for i in xrange(1+num_v+num_e, len(lines)):
       ell = lines[i].split()
       loops[ell[0]] = ell[1:]
+      
+    G = cls(V,E,loops=loops)
+    G.get_angles()
+    return G
     
+  def get_angles(self):
     #sort the edges around each vertex and record the angle
-    for v in V:
+    for v in self.v:
       for i,ei in enumerate(v.i_edges):
-        ovi = (E[ei.ind].dest if ei.sign>0 else E[ei.ind].src)
-        vec = V[ovi].pt - v.pt
+        ovi = (self.e[ei.ind].dest if ei.sign>0 else self.e[ei.ind].src)
+        vec = self.v[ovi].pt - v.pt
         ang = math.atan2(vec.imag, vec.real)
         v.i_edges[i] = (ei, ang)
       v.i_edges.sort(key=lambda x:x[1])
       v.i_edge_angles = [x[1] for x in v.i_edges]
       v.i_edges = [x[0] for x in v.i_edges]
-    return cls(V,E,loops=loops)
   
   def __str__(self):
     ans = "Vertices: \n"

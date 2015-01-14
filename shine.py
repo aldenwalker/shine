@@ -11,6 +11,7 @@ import math
 import copy
 import random
 import collections
+import pickle
 
 import Tkinter as tk
 import tkFileDialog
@@ -447,6 +448,7 @@ class Shine:
     
     #set up the data variables
     self.ES = None
+    self.ES_history = None
     self.GS = None
     self.LS = None
     
@@ -474,8 +476,9 @@ class Shine:
     #create the menu bar
     self.menubar = tk.Menu(parent)
     self.filemenu = tk.Menu(self.menubar, tearoff=0)
+    self.filemenu.add_command(label='New from graph', command=self.new_graph)
     self.filemenu.add_command(label='Open', command=self.open_file)
-    self.filemenu.add_command(label='Save session')
+    self.filemenu.add_command(label='Save session', command=self.save_session)
     self.filemenu.add_command(label='Export', command=self.export)
     self.filemenu.add_command(label='Quit', command=self.parent.destroy)
     self.menubar.add_cascade(label='File', menu=self.filemenu)
@@ -493,18 +496,45 @@ class Shine:
     self.parent.config(menu=self.menubar)
   
   def open_file(self):
-    filename = tkFileDialog.askopenfilename(parent=self.parent)
+    filename = tkFileDialog.askopenfilename(parent=self.parent, filetypes=[('Graph or session', '*.pkl *.pgr'),('Planar graph', '*.pgr'),('Saved session', '*.pkl')])
     if len(filename) < 5:
       return
     if filename[-3:] == 'pgr':
       self.ES = emsurf.EmbeddedSurface.from_planar_graph_file(filename)
+      self.ES_history = []
       self.GS = gsurf.GeometricSurface.geometrize_tsurf(self.ES)
       self.LS = gsurf.LiftedSurface.lift_gsurf(self.GS)
+    elif filename[-3:] == 'pkl':
+      f = open(filename, 'rb')
+      self.ES, self.ES_history, self.GS, self.LS, loops = pickle.load(f)
+      f.close()
+      self.reset()
+      for word, EP in loops:
+        self.loop_displayer.add_loop((word, EP))
+      return
     else:
-      tkMessageBox.showerror(title='Error', message='File does not have a .pgr extension', parent=self.parent)
+      tkMessageBox.showerror(title='Error', message='File does not have a .pgr or .pkl extension', parent=self.parent)
       return
     
     self.reset()
+  
+  def new_graph(self):
+    GD = ShineGraphDrawer(self, self.parent)
+    GD.window.wait_window(GD.window)
+    if not GD.OK_status:
+      return
+    graph_input = GD.graph
+    self.ES = emsurf.EmbeddedSurface.from_planar_graph(graph_input)
+    self.ES_history = []
+    self.GS = gsurf.GeometricSurface.geometrize_tsurf(self.ES)
+    self.LS = gsurf.LiftedSurface.lift_gsurf(self.GS)
+    self.reset()
+  
+  def save_session(self):
+    filename = tkFileDialog.asksaveasfilename(parent=self.parent, defaultextension='.pkl', filetypes=[('Saved sessions','*.pkl')])
+    f = open(filename, 'wb')
+    pickle.dump( (self.ES, self.ES_history, self.GS, self.LS, [(ell.word,ell.EP) for ell in self.loop_displayer.loops]), f)
+    f.close()
   
   def swap_show_lift(self):
     if self.do_show_lift.get() == 1:
@@ -520,15 +550,17 @@ class Shine:
     self.do_show_lift.set(0)
     
   def reset(self):
-    self.emsurf_displayer.reset()
     self.loop_displayer.reset()
+    self.emsurf_displayer.reset()
     if self.liftedsurf_displayer != None:
       self.liftedsurf_displayer.reset()
   
   def subdivide(self):
     if self.ES == None:
       return
+    old_ES = copy.deepcopy(self.ES)
     sub_data = self.ES.subdivide()
+    self.ES_history.append( (old_ES, sub_data) )
     self.GS.subdivide()
     for ell in self.loop_displayer.loops:
       ell.subdivide(*sub_data)
@@ -576,10 +608,10 @@ class Shine:
     
     W_surface_mesh = tk.Radiobutton(W_surface_option_frame, text='Mesh', variable=surface_outline, value=0, command=change_surface_style)
     surface_mesh_shading = tk.IntVar()
-    surface_mesh_shading.set(1)
+    surface_mesh_shading.set(0)
     W_surface_mesh_shading = tk.Checkbutton(W_surface_option_frame, text='Shading', variable=surface_mesh_shading)
     surface_mesh_mesh = tk.IntVar()
-    surface_mesh_mesh.set(1)
+    surface_mesh_mesh.set(0)
     W_surface_mesh_mesh = tk.Checkbutton(W_surface_option_frame, text='Mesh', variable=surface_mesh_mesh)
     surface_mesh_outline = tk.IntVar()
     surface_mesh_outline.set(1)
@@ -599,7 +631,7 @@ class Shine:
     
     W_loop_option_frame = tk.LabelFrame(dialog, text='Loop options')
     loop_smooth = tk.IntVar()
-    loop_smooth.set(0)
+    loop_smooth.set(1)
     W_loop_smooth = tk.Checkbutton(W_loop_option_frame, text='Smooth', variable=loop_smooth)
     
     W_loop_smooth.grid(row=0, column=0)
@@ -642,6 +674,144 @@ class Shine:
     
     
 
+
+#############################################################################
+# A graph entry thing
+#############################################################################
+class ShineGraphDrawer:
+  def __init__(self, shine_main, tk_parent):
+    self.shine_main = shine_main
+    self.tk_parent = tk_parent
+    
+    self.window = tk.Toplevel(master=self.tk_parent)
+    self.window.title('Graph drawer')
+    parent_location = (self.tk_parent.winfo_rootx(), self.tk_parent.winfo_rooty())
+    self.window.geometry('+%d+%d' % (parent_location[0], parent_location[1]))
+    self.window.focus_set()
+    self.window.grab_set()
+    
+    self.canvas = tk.Canvas(self.window, borderwidth=0)
+    self.canvas.bind('<Button-1>', self.canvas_click)
+    self.canvas.grid(column=0, row=0, rowspan=3, columnspan=2, sticky=tk.W+tk.E+tk.N+tk.S)
+    
+    self.OK = tk.Button(self.window, text='Finish', command=self.OK_press)
+    self.OK_status = False
+    self.cancel = tk.Button(self.window, text='Cancel', command=self.window.destroy)
+    
+    self.OK.grid(row=0, column=1, sticky=tk.W+tk.E+tk.N+tk.S)
+    self.cancel.grid(row=1, column=1, sticky=tk.W+tk.E+tk.N+tk.S)
+    
+    self.window.columnconfigure(0, weight=1)
+    self.window.rowconfigure(2, weight=1)
+    
+    self.graph = emsurf.PlanarGraph([],[])
+    self.highlighted_vertex = None
+    self.drawing_items_verts = dict()
+    self.drawing_items_edges = dict()
+    self.canvas_reset()
+    
+  def OK_press(self):
+    self.OK_status = True
+    self.graph.get_angles()
+    self.window.destroy()
+  
+  def draw_plane_to_canvas(self, pt):
+    mpt = (self.plane_to_canvas_scale * (pt[0]-self.drawing_center[0]), \
+           self.plane_to_canvas_scale * (pt[1]-self.drawing_center[1]))
+    ans = (self.canvas_center[0] + mpt[0], self.canvas_center[1] - mpt[1])
+    return ans
+  
+  def canvas_to_draw_plane(self, pt):
+    mpt = ((pt[0]-self.canvas_center[0]) / self.plane_to_canvas_scale, \
+           (-pt[1]+self.canvas_center[1]) / self.plane_to_canvas_scale)
+    ans = (self.drawing_center[0] + mpt[0], self.drawing_center[1] + mpt[1])
+    return ans
+  
+  
+  def canvas_reset(self):
+    aspect_ratio = 1.0
+    allowed_height = 600
+    allowed_width = 600
+    desired_height = allowed_width * aspect_ratio
+    if desired_height > allowed_height:
+      self.canvas_width = allowed_height
+      self.canvas_height = allowed_height / aspect_ratio
+    else:
+      self.canvas_width = allowed_width
+      self.canvas_height = desired_height
+    
+    self.plane_ll = (-6.0,-6.0)
+    self.plane_ur = (6.0,6.0)
+    self.plane_height = 12.0
+    self.plane_width = 12.0
+    
+    self.plane_to_canvas_scale = self.canvas_width / self.plane_width
+    self.canvas_center = (self.canvas_width/2, self.canvas_height/2)
+    self.drawing_center = (self.plane_ll[0] + self.plane_width/2, self.plane_ll[1] + self.plane_height/2)
+    
+    for i in xrange(-6,7):
+      for j in xrange(-6,7):
+        pt = self.draw_plane_to_canvas((i,j))
+        r = (1 if (i,j)!=(0,0) else 2)
+        self.canvas.create_oval(pt[0]-r,pt[1]-r,pt[0]+r,pt[1]+r,fill='#555555',outline='')
+    
+    self.canvas.config(background='#FFFFFF')
+    self.canvas.config(width=self.canvas_width)
+    self.canvas.config(height=self.canvas_height)
+  
+  def canvas_click(self, event):
+    click_canvas_coords = (event.x, event.y)
+    click_plane_coords = self.canvas_to_draw_plane(click_canvas_coords)
+    clicked_on = self.canvas.gettags(self.canvas.find_withtag(tk.CURRENT))
+    if len(clicked_on)>1:
+      clicked_on = int(clicked_on[0])
+    else:
+      clicked_on = None
+    if clicked_on == None: 
+      #make a new vertex
+      self.add_vertex(click_plane_coords, self.highlighted_vertex)
+      self.highlighted_vertex = None
+    else:
+      if self.highlighted_vertex != None:
+        self.add_edge(self.highlighted_vertex, clicked_on)
+        self.highlighted_vertex = None
+      else:
+        self.highlighted_vertex = clicked_on
+    self.redraw_canvas()
+  
+  def add_vertex(self, new_plane_coords, connected_to_vert=None):
+    vrt = emsurf.PlanarVertex(complex(*new_plane_coords), [], [])
+    self.graph.v.append(vrt)
+    if connected_to_vert != None:
+      self.add_edge(connected_to_vert, len(self.graph.v)-1)
+  
+  def add_edge(self, v1, v2):
+    self.graph.e.append( emsurf.PlanarEdge(v1, v2) )
+    self.graph.v[v1].i_edges.append( SI(len(self.graph.e)-1,1) )
+    self.graph.v[v2].i_edges.append( SI(len(self.graph.e)-1,-1) )
+  
+  def redraw_canvas(self):    
+    for i,e in enumerate(self.graph.e):
+      if i in self.drawing_items_edges:
+        continue
+      ppt1 = self.draw_plane_to_canvas((self.graph.v[e.src].pt.real,self.graph.v[e.src].pt.imag))
+      ppt2 = self.draw_plane_to_canvas((self.graph.v[e.dest].pt.real,self.graph.v[e.dest].pt.imag))
+      di = self.canvas.create_line(ppt1[0], ppt1[1], ppt2[0], ppt2[1], fill='#000000', width=3)
+      self.drawing_items_edges[i] = di
+    for i in xrange(len(self.graph.v)):
+      if i in self.drawing_items_verts:
+        di = self.drawing_items_verts[i]
+        self.canvas.itemconfig(di, fill=('#FF0000' if i==self.highlighted_vertex else '#000000'))
+        self.canvas.tag_raise(di)
+      else:
+        pt = self.graph.v[i].pt
+        ppt = self.draw_plane_to_canvas((pt.real,pt.imag))
+        di = self.canvas.create_oval(ppt[0]-5,ppt[1]-5,ppt[0]+5,ppt[1]+5,fill='#000000',outline='',tag=str(i))
+        self.drawing_items_verts[i] = di
+
+      
+    
+  
 ############################################################################
 # subvisualizer based on the embedded surface visualizer
 ############################################################################
@@ -1197,10 +1367,13 @@ class ShineLoopDisplay:
     self.loops = []
     self.frames = []
   
-  def add_loop(self):
+  def add_loop(self, loop=None):
     if self.shine_parent.ES == None:
       return
-    word, EP = self.add_loop_dialog()
+    if loop != None:
+      word, EP = loop
+    else:
+      word, EP = self.add_loop_dialog()
     #print EP
     if EP == None:
       return
@@ -1229,8 +1402,8 @@ class ShineLoopDisplay:
     self.shine_parent.emsurf_displayer.canvas_redraw()
   
   def reset(self):
-    for i in xrange(len(self.loops)-1, 0, -1):
-      self.delete_loop(self.loops[i])
+    while len(self.loops) > 0:
+      self.delete_loop(self.loops[0])
 
   def add_loop_dialog(self):
     dialog = tk.Toplevel(master=self.tk_parent)
@@ -1240,28 +1413,57 @@ class ShineLoopDisplay:
     dialog.focus_set()
     dialog.grab_set()
     
-    W_word_label = tk.Label(dialog, text='Create a loop as a product:')
-    W_known_loops = tk.Label(dialog, text='Known loops: ' + str([ell for ell in self.shine_parent.ES.loops]) )
-    W_word_input = tk.Entry(dialog)
+    W_word_frame = tk.LabelFrame(dialog, text='Create loop as a product')
+    W_known_loops = tk.Label(W_word_frame, text='Known loops: ' + str([ell for ell in self.shine_parent.ES.loops]) )
+    W_word_input = tk.Entry(W_word_frame)
     word_input = [None] #making it a list makes it visible to the function set_word
     def set_word():
       word_input[0] = W_word_input.get()
       dialog.destroy()
-    W_word_go = tk.Button(dialog, text='Add from word', command=set_word )
-    W_cancel = tk.Button(dialog, text='Cancel', command=dialog.destroy)
+    W_word_go = tk.Button(W_word_frame, text='Add from word', command=set_word )
+    W_known_loops.grid(column=0, row=0, sticky=tk.W)
+    W_word_input.grid(column=0, row=1, sticky=tk.W+tk.E)
+    W_word_go.grid(column=1, row=1, sticky=tk.E)
+    W_word_frame.columnconfigure(0, weight=1)
     
-    W_word_label.grid(column=0, row=0, sticky=tk.W)
-    W_known_loops.grid(column=0, row=1, sticky=tk.W)
-    W_word_input.grid(column=0, row=2, sticky=tk.W)
-    W_word_go.grid(column=0, row=3, sticky=tk.W)
-    W_cancel.grid(column=1, row=3)
+    W_drawer_frame = tk.LabelFrame(dialog, text='Create loop by drawing')
+    W_drawer_frame.columnconfigure(0,weight=1)
+    drawer_input = [None]
+    def get_drawer_loop():
+      LD = ShineLoopDrawer(self.shine_parent, self.tk_parent)
+      LD.window.wait_window(LD.window)
+      if LD.OK_status == True:
+        drawer_input[0] = LD.EP
+        dialog.destroy()
+    W_drawer_button = tk.Button(W_drawer_frame, text='Launch loop drawer', command=get_drawer_loop)
+    W_drawer_button.grid(column=0, row=0)
+    
+    W_cancel = tk.Button(dialog, text='Cancel', command=dialog.destroy)
+
+    W_word_frame.grid(column=0, row=0, sticky=tk.W+tk.N+tk.E+tk.S)
+    W_drawer_frame.grid(column=0, row=1, sticky=tk.W+tk.S+tk.E+tk.N)
+    W_cancel.grid(column=0, row=2)
+    dialog.columnconfigure(0, weight=1)
+    dialog.rowconfigure(0, weight=1)
     
     dialog.wait_window(dialog)
     
+    self.shine_parent.parent.focus_set()  
+    self.shine_parent.parent.grab_set()  
+    
     if word_input[0] != None:
       word_input = word_input[0]
-      EP = self.shine_parent.ES.loop_from_word(word_input)
+      if len(self.shine_parent.ES_history) == 0:
+        EP = self.shine_parent.ES.loop_from_word(word_input)
+      else:
+        EP = self.shine_parent.ES_history[0][0].loop_from_word(word_input)
+        #print "Got original loop:", EP
+        for old_ES, sub_data in self.shine_parent.ES_history:
+          EP.subdivide(*sub_data)
+          #print "Subdivided to:", EP
       return (word_input, EP)
+    elif drawer_input[0] != None:
+      return (None, drawer_input[0])
     
     return None, None
 
@@ -1344,6 +1546,7 @@ class ShineLoop:
         self.PPs.append( ['visible', R3.PolygonalPath(V)] )
       else:
         self.PPs.append( ['hidden', R3.PolygonalPath(V)] )
+      return
     fvp1 = (first_vert+1)%lv
     seg = [V[first_vert], V[fvp1]]
     Ti_near_segment, unused_segments = self.shine_main.emsurf_displayer.draw_viewer.viewer_grid_near_segment( seg )
@@ -1381,7 +1584,313 @@ class ShineLoop:
     #for pp in self.PPs:
     #  print pp
           
+
+
+###########################################################################
+# a window to input a loop by drawing a curve
+###########################################################################
+class ShineLoopDrawer:
+  def __init__(self, shine_main, tk_parent):
+    self.shine_main = shine_main
+    self.tk_parent = tk_parent
+    self.working_ES = (self.shine_main.ES if len(self.shine_main.ES_history)==0 else self.shine_main.ES_history[0][0])
+    self.current_plane_path = []
+    self.current_plane_path_status = 'EMPTY'
+    self.current_side = 'TOP'
     
+    self.window = tk.Toplevel(master=self.tk_parent)
+    self.window.title('Loop drawer')
+    parent_location = (self.tk_parent.winfo_rootx(), self.tk_parent.winfo_rooty())
+    self.window.geometry('+%d+%d' % (parent_location[0], parent_location[1]))
+    self.window.focus_set()
+    self.window.grab_set()
+    
+    self.canvas = tk.Canvas(self.window, borderwidth=0)
+    self.canvas.bind('<Button-1>', self.canvas_click)
+    self.canvas.grid(column=0, row=0, rowspan=4, columnspan=3, sticky=tk.W+tk.E+tk.N+tk.S)
+    
+    self.side_drawing_label = tk.Label(self.window, text='Current side: ' + self.current_side, bg='#FFFFFF')
+    self.OK = tk.Button(self.window, text='Finish', command=self.OK_press)
+    self.OK_status = False
+    self.cancel = tk.Button(self.window, text='Cancel', command=self.window.destroy)
+    self.delete = tk.Button(self.window, text='Delete point', command=self.delete_point)
+    
+    self.side_drawing_label.grid(row=0, column=0, sticky=tk.W+tk.N)
+    self.delete.grid(row=0, column=2, sticky=tk.W+tk.E+tk.N+tk.S)
+    self.OK.grid(row=1, column=2, sticky=tk.W+tk.E+tk.N+tk.S)
+    self.cancel.grid(row=2, column=2, sticky=tk.W+tk.E+tk.N+tk.S)
+    
+    self.window.columnconfigure(0, weight=1)
+    self.window.rowconfigure(3, weight=1)
+    
+    self.original_drawing_items = []
+    self.path_drawing_items = []
+    self.canvas_reset()
+    
+  def OK_press(self):
+    self.OK_status = True
+    self.EP = self.construct_EP()
+    self.window.destroy()
+  
+  def draw_plane_to_canvas(self, pt):
+    mpt = (self.plane_to_canvas_scale * (pt[0]-self.drawing_center[0]), \
+           self.plane_to_canvas_scale * (pt[1]-self.drawing_center[1]))
+    ans = (self.canvas_center[0] + mpt[0], self.canvas_center[1] - mpt[1])
+    return ans
+  
+  def canvas_to_draw_plane(self, pt):
+    mpt = ((pt[0]-self.canvas_center[0]) / self.plane_to_canvas_scale, \
+           (-pt[1]+self.canvas_center[1]) / self.plane_to_canvas_scale)
+    ans = (self.drawing_center[0] + mpt[0], self.drawing_center[1] + mpt[1])
+    return ans
+  
+  def get_surface_pieces_and_grid(self):
+    self.grid_ll = [0,0]
+    self.grid_ur = [0,0]
+    self.grid_width = None
+    self.grid_height = None
+    
+    #find the extents of the surface
+    for v in self.working_ES.em_v:
+      if v[0] < self.grid_ll[0]:
+        self.grid_ll[0] = v[0]
+      if v[0] > self.grid_ur[0]:
+        self.grid_ur[0] = v[0]
+      if v[1] < self.grid_ll[1]:
+        self.grid_ll[1] = v[1]
+      if v[1] > self.grid_ur[1]:
+        self.grid_ur[1] = v[1]
+    self.grid_width = self.grid_ur[0] - self.grid_ll[0]
+    self.grid_height = self.grid_ur[1] - self.grid_ll[1]
+    
+    
+    #go through all the triangles and project them down (or up)
+    self.pieces_top_edges = set()
+    self.pieces_bottom_edges = set()
+    self.pieces_boundary_edges = set()
+    for i,e in enumerate(self.working_ES.em_e):
+      h1 = e[0][2]
+      h2 = e[1][2]
+      pseg = [ R2.Vector(e[0][:2]), R2.Vector(e[1][:2]) ]
+      h10 = (abs(h1) < 1e-10)
+      h1b0 = (h1 > 1e-10)
+      h20 = (abs(h2) < 1e-10)
+      h2b0 = (h2 > 1e-10)
+      if h10 and h20:
+        self.pieces_boundary_edges.add(i)
+      elif h1b0 or h2b0:
+        self.pieces_top_edges.add(i)
+      else:
+        self.pieces_bottom_edges.add(i)
+    
+    
+  
+  def canvas_reset(self):
+    
+    #first get all the triangles and boundary and stuff
+    self.get_surface_pieces_and_grid()
+    
+    #get the ratio of the the sides
+    aspect_ratio = self.grid_height / float(self.grid_width)
+    allowed_height = 600
+    allowed_width = 800
+    desired_height = allowed_width * aspect_ratio
+    if desired_height > allowed_height:
+      self.canvas_width = allowed_height
+      self.canvas_height = allowed_height / aspect_ratio
+    else:
+      self.canvas_width = allowed_width
+      self.canvas_height = desired_height
+    self.plane_to_canvas_scale = self.canvas_width / self.grid_width
+    self.plane_to_canvas_scale *= 0.95
+    self.canvas_center = (self.canvas_width/2, self.canvas_height/2)
+    self.drawing_center = (self.grid_ll[0] + self.grid_width/2, self.grid_ll[1] + self.grid_height/2)
+    
+    self.canvas.config(background='#FFFFFF')
+    self.canvas.config(width=self.canvas_width)
+    self.canvas.config(height=self.canvas_height)
+    
+    #draw the edges
+    for ei in self.pieces_boundary_edges:
+      seg = self.working_ES.em_e[ei]
+      v1 = self.draw_plane_to_canvas(seg[0])
+      v2 = self.draw_plane_to_canvas(seg[1])
+      coords = [x for v in [v1,v2] for x in v]
+      di = self.canvas.create_line(*coords, fill='#000000', width=4, activewidth=6, tag=str(ei))
+      self.original_drawing_items.append(di)
+  
+  def canvas_click(self, event):
+    if self.current_plane_path_status == 'COMPLETE':
+      return
+    click_canvas_coords = (event.x, event.y)
+    click_plane_coords = self.canvas_to_draw_plane(click_canvas_coords)
+    clicked_on = self.canvas.gettags(self.canvas.find_withtag(tk.CURRENT))
+    if len(clicked_on)>0:
+      clicked_on = int(clicked_on[0])
+    if clicked_on == -1 and self.current_side=='TOP':
+      if self.current_plane_path_status=='POINT':
+        return
+      self.add_path_point(click_plane_coords, self.current_side)
+      self.current_plane_path_status = 'COMPLETE'
+    elif clicked_on in self.pieces_boundary_edges:
+      if self.current_plane_path_status == 'EMPTY':
+        return
+      self.add_path_point(click_plane_coords, self.current_side, clicked_on=clicked_on)
+      self.current_side = ('BOTTOM' if self.current_side == 'TOP' else 'TOP')
+      self.side_drawing_label.config(text='Current side: ' + self.current_side)
+    else:
+      self.add_path_point(click_plane_coords, self.current_side)
+    self.redraw_path()
+  
+  def add_path_point(self, plane_coords, side, clicked_on=None):
+    lcpp = len(self.current_plane_path)
+    if self.current_plane_path_status == 'EMPTY':
+      self.current_plane_path = [(plane_coords, self.current_side)]
+      self.current_plane_path_status = 'POINT'
+    elif self.current_plane_path_status == 'POINT':
+      self.current_plane_path = [((self.current_plane_path[0][0], plane_coords), (None, clicked_on), side)]
+      self.current_plane_path_status = 'PATH'
+    else:
+      self.current_plane_path.append( ((self.current_plane_path[-1][0][1], plane_coords), \
+                                      (self.current_plane_path[-1][1][1], clicked_on),    \
+                                                                                side) )
+  
+  def delete_point(self):
+    if len(self.current_plane_path) == 0:
+      return
+    if self.current_plane_path_status == 'POINT':
+      self.current_plane_path = []
+      self.current_plane_path_status = 'EMPTY'
+    elif self.current_plane_path_status == 'PATH':
+      if self.current_plane_path[-1][1][1] != None:
+        self.current_side = ('BOTTOM' if self.current_side == 'TOP' else 'TOP')
+      if len(self.current_plane_path) == 1:
+        self.current_plane_path[0] = (self.current_plane_path[0][0][0], self.current_plane_path[0][-1])
+        self.current_plane_path_status = 'POINT'
+      else:
+        del self.current_plane_path[-1]
+    elif self.current_plane_path_status == 'COMPLETE':
+      del self.current_plane_path[-1]
+      self.current_plane_path_status = 'PATH'
+    self.side_drawing_label.config(text='Current side: ' + self.current_side)
+    self.redraw_path()
+    
+  def redraw_path(self):
+    lpdi = len(self.path_drawing_items) 
+    lcpp = len(self.current_plane_path)
+    #print "Before redrawing: "
+    #print self.current_plane_path
+    #print self.path_drawing_items
+    if self.current_plane_path_status == 'EMPTY':
+      for di in self.path_drawing_items:
+        self.canvas.delete(di)
+      self.path_drawing_items = []
+      return
+    elif self.current_plane_path_status == 'POINT':
+      if lpdi > 1:
+        for di in self.path_drawing_items[1:]:
+          self.canvas.delete(di)
+        self.path_drawing_items = self.path_drawing_items[:1]
+      elif lpdi == 0:
+        pt = self.draw_plane_to_canvas(self.current_plane_path[0][0])
+        di = self.canvas.create_oval(pt[0]-5,pt[1]-5,pt[0]+5,pt[1]+5,fill='#00FF00', outline='', activefill='#FF0000', tag='-1')
+        self.path_drawing_items.append(di)
+    elif self.current_plane_path_status == 'PATH' or  self.current_plane_path_status=='COMPLETE':
+      if lpdi > lcpp+1:
+        for di in self.path_drawing_items[lcpp+1:]:
+          self.canvas.delete(di)
+        self.path_drawing_items = self.path_drawing_items[:lcpp+1]
+      else:
+        for i in xrange(lpdi, lcpp+1):
+          #print "Adding index", i
+          ind = i-1
+          coords = self.draw_plane_to_canvas(self.current_plane_path[ind][0][0]) + \
+                   self.draw_plane_to_canvas(self.current_plane_path[ind][0][1])
+          di = self.canvas.create_line(*coords, width=2, fill='#00FF00')
+          self.path_drawing_items.append(di)
+    #print "After redrawing: "
+    #print self.current_plane_path
+    #print self.path_drawing_items
+    #now make sure the drawing items have the correct shading
+    di = self.path_drawing_items[0]
+    self.canvas.itemconfig(di, activefill=('' if self.current_side=='BOTTOM' else '#FF0000'))
+    self.canvas.tag_raise(di) 
+    for i in xrange(len(self.path_drawing_items)):
+      di = self.path_drawing_items[i]
+      ind = (i-1 if i>0 else 0)
+      if self.current_plane_path[ind][-1] == self.current_side:
+        col = '#00FF00'
+      else:
+        col = '#AAFFAA'
+      self.canvas.itemconfig(di, fill=col)
+
+  def construct_EP(self):
+    if self.current_plane_path_status != 'COMPLETE':
+      return None
+    edge_path = []
+    edge_coords = []
+    #make the top edges
+    top_edges = []
+    for ei in self.pieces_top_edges:
+      R3seg = self.working_ES.em_e[ei]
+      projseg = [R2.Vector([R3seg[0][0], R3seg[0][1]]), R2.Vector([R3seg[1][0], R3seg[1][1]])]
+      top_edges.append((ei, projseg))
+    bottom_edges = []
+    for ei in self.pieces_bottom_edges:
+      R3seg = self.working_ES.em_e[ei]
+      projseg = [R2.Vector([R3seg[0][0], R3seg[0][1]]), R2.Vector([R3seg[1][0], R3seg[1][1]])]
+      bottom_edges.append((ei, projseg))
+    boundary_edges = dict()
+    for ei in self.pieces_boundary_edges:
+      R3seg = self.working_ES.em_e[ei]
+      projseg = [R2.Vector([R3seg[0][0], R3seg[0][1]]), R2.Vector([R3seg[1][0], R3seg[1][1]])]
+      boundary_edges[ei] = projseg
+      
+    for seg, bd_edges, side in self.current_plane_path:
+      #print "Getting edge crossings from", seg, bd_edges, side
+      L = (top_edges if side=='TOP' else bottom_edges)
+      t_values = []
+      reverse_dir = (side == 'BOTTOM')
+      R2seg = (R2.Vector(seg[0]), R2.Vector(seg[1]))
+      for ei, edge_seg in L:
+        t = R2.intersect_segments_t_values(R2seg, edge_seg)
+        if t == None:
+          continue
+        t,t_edge = t
+        cross_sign = (edge_seg[1]-edge_seg[0]).cross(R2seg[1]-R2seg[0]) > 0
+        t_values.append( (t, t_edge, ei, cross_sign) )
+      t_values.sort()
+      #print "Got intersections: ", t_values
+      for t, t_edge, ei, dir in t_values:
+        edge_path.append( SI(ei,(1 if (dir!=reverse_dir) else -1)) )
+        edge_coords.append( t_edge )
+      if bd_edges[1] != None:
+        edge_seg = boundary_edges[bd_edges[1]]
+        t = R2.intersect_segments_t_values(R2seg, edge_seg, restrict_to_01=False)
+        if t == None:
+          continue
+        t, t_edge = t
+        dir = (edge_seg[1]-edge_seg[0]).cross(R2seg[1]-R2seg[0]) > 0
+        edge_path.append( SI(bd_edges[1],(1 if (dir!=reverse_dir) else -1)) )
+        edge_coords.append( t_edge )
+        #print "There's a boundary; adding", t_edge, "of", bd_edges[1]
+    EP = emsurf.EmbeddedPath(edge_path, edge_coords)
+    #print "Before simplification:", EP
+    EP.simplify()
+    #print "Before subdivision:", EP
+    for old_ES, sub_data in self.shine_main.ES_history:
+      EP.subdivide(*sub_data)
+    return EP
+      
+    
+
+
+
+
+
+
+
+  
 ############################################################################
 # a hyperbolic lifted surface displayer
 ############################################################################

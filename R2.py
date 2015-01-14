@@ -88,6 +88,33 @@ def intersect_segments(s1, s2):
   else:
     return None
 
+def intersect_segments_t_values(s1, s2, restrict_to_01=True):
+  """return t1,t2 where these are the fractions along the segments"""
+  #print "Intersecting ", s1, s2
+  s1x1, s1y1 = s1[0]
+  s1x2, s1y2 = s1[1]
+  s2x1, s2y1 = s2[0]
+  s2x2, s2y2 = s2[1]
+  t1x, t1y = [s1x2-s1x1, s1y2-s1y1]
+  t2x, t2y = [s2x2-s2x1, s2y2-s2y1]
+  RHSx, RHSy = [s2x1-s1x1, s2y1-s1y1]
+  a,b,c,d = t1x, -t2x, t1y, -t2y
+  det = a*d-b*c
+  if det == 0:
+    #print "det 0"
+    return None
+  Ia, Ib, Ic, Id = d/det, -b/det, -c/det, a/det
+  ansx = Ia*RHSx + Ib*RHSy
+  ansy = Ic*RHSx + Id*RHSy
+  if not restrict_to_01:
+    return ansx, ansy
+  if 0.0 <= ansx and ansx <= 1.0 and 0.0 <= ansy and ansy <= 1.0:
+    return (ansx, ansy)
+  else:
+    return None
+
+
+
 ###########################################################################
 # fit a single cubic bezier curve to data.  Each point should be of the 
 # form (float t, R2.vector v), where the curve wants to be at v at time t
