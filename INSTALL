@@ -1,0 +1,1 @@
+You need to have the python packages scipy and tkinter.  Tkinter is basically standard with python, and scipy should be easy to get.  See http://www.scipy.org/.

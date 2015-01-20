@@ -1,11 +1,101 @@
 shine
 
 Copyright 2014 Alden Walker
+akwalker@math.uchicago.edu
+Released under the GPL.
 
 shine currently does the following:
 (1) finds and visualizes hyperbolic structures on surfaces
-(2) visualizes embedded surfaces in R^3
+(2) visualizes embedded surfaces in R^3 and (hyperbolic) geodesics on them
 
-shine is currently in development.  The goal is that shine should be 
-able to nicely display hyperbolic geodesics on surfaces embedded in R^3.
+See INSTALL for installation instructions.  Once you have the appropriate 
+python packages, you should just have to type:
+
+ipython shine.py
+
+(I use ipython).
+
+
+*** comments *** 
+
+Shine is not particularly polished (hah).  It is extremely slow, and opening large 
+surfaces takes a while (because it finds the hyperbolic structure).  
+It should be rewritten in C++ or something and use OpenGL.  Sometimes 
+drawing loops has random bugs.  
+
+Email me with any questions, and especially with any bugs you encounter!  
+
+
+
+
+
+*** opening/loading ***
+
+Shine creates surfaces as boundaries of regular neighborhoods of planar 
+graphs.  It triangulates them and finds a hyperbolic structure (it tries 
+to make the incident triangles around a vertex have equidistributed angles).
+There are two ways to get a planar graph into shine.
+
+Creating a surface from a graph:
+
+Select "new from graph" from the file menu and draw a graph.  Click a vertex 
+to make it active, and then you can click on either another vertex (to draw an 
+edge between them) or on blank space (to create a new vertex joined to the 
+active one).  The dots show integer points.  Since takes a neighborhood of 
+radius 1/2.  The chunkier a surface is, the better looking it will be.
+
+Loading a graph file:
+
+A graph file has the following format:
+<number of vertices> <number of edges>
+<coordinates of vertices, one vertex per line>
+<vertices connected by edges, one edge per line>
+<optional loop data>
+
+See genus_2.pgr for an example.  The loop data is in the following format:
+<loop label> <edges crossed>
+
+A loop travels along the top of the regular neighborhood of the surface, and the 
+edges should be listed in order, with signs.  To go around vertically, 
+write an "a" after an edge.  To ensure the loops can be multiplied, they should all 
+start and end with the same edge.  See genus_2.pgr.
+
+You can also load a saved session .pkl file.
+
+*** saving ***
+
+Go to File -> save session to save a .pkl file with all the data of the surface, 
+loops, etc.
+
+*** 3D visualization ***
+
+Control the visualization with the buttons on the upper left.  Turn the mesh and 
+shading on or off with the view menu.  The buttons S and F subdivide and flow.  Subdividing 
+twice and then flowing numerous times usually produces a good first pass.
+
+*** hyperbolic visualization ***
+
+Use the View menu to see the lifted surface.  Subdividing makes this take much longer.
+If you want to explore the hyperbolic structure, don't bother subdividing.  You can click to 
+change the zoom.
+
+*** loops ***
+
+Click the plus to add a loop, which can either be given as a word in the generators 
+from the graph file (if they exist), or as a drawn loop on the surface.  Click the 
+boundary edges to change sides of the surface.
+
+Click "geoify" to smooth the curve in the hyperbolic metric.  Note you need to do this 
+every time you subdivide.
+
+You can change the color by clicking the color.
+
+*** exporting ***
+
+The default selections produce a good approximation of the standard surface outline 
+that everyone draws.  It's worthwhile to give the visualization one last subdivision 
+and smooth so that the boundary looks good.
+
+
+
 
