@@ -1,6 +1,16 @@
 import copy
 from signedind import SignedInd as SI
 
+#we need a marker for boundary edges other than None
+class BDObj(object):
+  def __str__(self):
+    return "BD"
+  def __repr__(self):
+    return "BD"
+
+BD = BDObj()
+
+
 ############################################################################
 # functions to help with triangulating the standard polygon 
 ############################################################################

@@ -770,7 +770,3 @@ class LiftedSurface(GeometricSurface):
 
 
 
-
-
-
-

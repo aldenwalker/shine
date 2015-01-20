@@ -141,6 +141,53 @@ class HypGeodesicInterval:
   def from_pt_angle_dist(cls, v, A, d):
     return cls(v, point_angle_dist(v, A, d))
   
+  @classmethod
+  def orthogonal_to_geodesics(cls, G1, G2):
+    c1, r1 = G1
+    c2, r2 = G2
+    print "Find geodesic orthogonal to ", (c1, r1), (c2, r2)
+    if r1 == 'inf':
+      if r2 == 'inf':
+        raise ValueError("No orthogonal geodesic segment between limiting geodesics")
+      d1 = abs(c2-c1)
+      d2 = math.sqrt(d1**2 - r2**2)
+      far_angle = math.asin(d2/d1)
+      top_small_angle = math.pi/2.0 - far_angle
+      bottom_length = r2*math.sin(top_small_angle)
+      height = r2*math.cos(top_small_angle)
+      geo_seg_rad = math.sqrt(bottom_length**2 + height**2)
+      dest = complex(r2 + (-bottom_length if c2 > c1 else bottom_length), height)
+      return HypGeodesicInterval( complex(c1, geo_seg_rad), dest)
+    if r2 == 'inf':
+      return cls.orthogonal_to_geodesics(G2, G1).reversed()
+    #they're both circles
+    d = abs(c2-c1)
+    h = math.sqrt( (d-r1-r2)*(d-r1+r2)*(d+r1-r2)*(d+r1+r2) ) / (2*d)
+    a = math.sqrt(h**2 + r1**2)
+    inner_angle1 = math.acos(r1/a)
+    height1 = r1*math.sin(inner_angle1)
+    base1 = r1*math.cos(inner_angle1)
+    print "Stuff1: ", d, h, a, inner_angle1, height1, base1
+    if (c1<c2 and c1+r1>c2) or (c2>c1 and c2-r2>c1+r1) or (c1<c2 and c2-r2<c1):
+      dir1 = 'right'
+    else:
+      dir1 = 'left'
+    source = complex( (c1 + base1 if dir1=='right' else c1-base1), height1)
+        
+    b = math.sqrt(h**2 + r2**2)
+    inner_angle2 = math.acos(r2/b)
+    height2 = r2*math.sin(inner_angle2)
+    base2 = r2*math.cos(inner_angle2)
+    print "Stuff2: ", h, b, inner_angle2, height2, base2
+    if (c1<c2 and c1+r1>c2) or (c2<c1 and c2+r2<c1-r1) or (c2<c1 and c2+r2>c1):
+      dir2 = 'right'
+    else:
+      dir2 = 'left'
+    dest = complex( (c2 + base2 if dir2=='right' else c2-base2), height2)
+    return HypGeodesicInterval(source, dest)
+    
+    
+  
   def reversed(self):
     return HypGeodesicInterval(self.end, self.start)
   
@@ -184,6 +231,12 @@ class HypGeodesicInterval:
   
   def __str__(self):
     return "GI(" + str(self.start) + "," +  str(self.end) + ")"
+  
+  def mathematica_string(self, opt='Black'):
+    if self.vertical:
+      return 'Graphics[{' + opt + ',Line[{{' + str(self.circ_center.real) + ',' + str(self.circ_angle1) + '},{' + str(self.circ_center) + ',' + str(self.circ_angle2) + '}}]}]'
+    else:
+      return 'Graphics[{' + opt + ',Circle[{' + str(self.circ_center) + ',0},' + str(self.circ_radius) + ',{' + str(self.circ_angle1) + ',' + str(self.circ_angle2) + '}]}]'
 
 #########################################################################
 # a hyperbolic triangle
