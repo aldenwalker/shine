@@ -145,7 +145,7 @@ class HypGeodesicInterval:
   def orthogonal_to_geodesics(cls, G1, G2):
     c1, r1 = G1
     c2, r2 = G2
-    print "Find geodesic orthogonal to ", (c1, r1), (c2, r2)
+    #print "Find geodesic orthogonal to ", (c1, r1), (c2, r2)
     if r1 == 'inf':
       if r2 == 'inf':
         raise ValueError("No orthogonal geodesic segment between limiting geodesics")
@@ -167,7 +167,7 @@ class HypGeodesicInterval:
     inner_angle1 = math.acos(r1/a)
     height1 = r1*math.sin(inner_angle1)
     base1 = r1*math.cos(inner_angle1)
-    print "Stuff1: ", d, h, a, inner_angle1, height1, base1
+    #print "Stuff1: ", d, h, a, inner_angle1, height1, base1
     if (c1<c2 and c1+r1>c2) or (c2>c1 and c2-r2>c1+r1) or (c1<c2 and c2-r2<c1):
       dir1 = 'right'
     else:
@@ -178,7 +178,7 @@ class HypGeodesicInterval:
     inner_angle2 = math.acos(r2/b)
     height2 = r2*math.sin(inner_angle2)
     base2 = r2*math.cos(inner_angle2)
-    print "Stuff2: ", h, b, inner_angle2, height2, base2
+    #print "Stuff2: ", h, b, inner_angle2, height2, base2
     if (c1<c2 and c1+r1>c2) or (c2<c1 and c2+r2<c1-r1) or (c2<c1 and c2+r2>c1):
       dir2 = 'right'
     else:

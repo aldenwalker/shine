@@ -14,6 +14,18 @@ def t_along_circle(C,t):
   c,r = C
   return (c + r*math.cos(2.0*math.pi*t), r*math.sin(2.0*math.pi*t))
 
+def circle_between_R_and_point(x,p):
+  a,b = p
+  if abs(a-x) < 0.001:
+    return None
+  f = abs(a-x)
+  d = (b*b-f*f)/(2*f)
+  if x < a:
+    return (a+d, a+d-x, math.atan2(b, -d), math.pi)
+  else:
+    return (a-d, x-a+d, 0, math.atan2(b,d))
+    
+
 
 ###########################################################################
 # create 2^n circles which go over the standard Cantor set intervals
@@ -49,19 +61,19 @@ class CantorSetComplement:
   def __init__(self, n, removal_fraction=1/3.0):
     self.C = cantor_set_circles(n, removal_fraction)
     self.big_circle = (0.5, 5.0)
-    print self.C
+    #print self.C
     bottom_seams = [hyp.HypGeodesicInterval.orthogonal_to_geodesics(self.C[i], self.C[i+1]) for i in xrange(len(self.C)-1)]
-    print bottom_seams
+    #print bottom_seams
     left_seam = hyp.HypGeodesicInterval.orthogonal_to_geodesics(self.big_circle, self.C[0])
     right_seam = hyp.HypGeodesicInterval.orthogonal_to_geodesics(self.C[-1], self.big_circle)
-    print left_seam, right_seam
+    #print left_seam, right_seam
     self.seams = [left_seam] + bottom_seams + [right_seam]
     self.cuffs = [hyp.HypGeodesicInterval(self.seams[i].end, self.seams[i+1].start) for i in xrange(len(self.seams)-1)]
     top_cuff = hyp.HypGeodesicInterval(self.seams[-1].end, self.seams[0].start)
     self.cuffs.append(top_cuff)
-    print "Cuff lengths: ", [x.length for x in self.cuffs]
-    print "Seam lengths: ", [x.length for x in self.seams]
-    print ','.join([x.mathematica_string() for x in self.seams] + [x.mathematica_string('Red') for x in self.cuffs])
+    #print "Cuff lengths: ", [x.length for x in self.cuffs]
+    #print "Seam lengths: ", [x.length for x in self.seams]
+    #print ','.join([x.mathematica_string() for x in self.seams] + [x.mathematica_string('Red') for x in self.cuffs])
     
     #the polygon's 0th side is the 0th seam
     sides = []
@@ -77,10 +89,13 @@ class CantorSetComplement:
     draw_big_circle = (0.5,0.55)
     cuff_circles = ['Circle[{'+str(c[0])+',0},'+str(c[1])+']' for c in self.C]
     outside_circle = 'Circle[{'+str(draw_big_circle[0])+',0},'+str(draw_big_circle[1])+']'
-    lines = []
-    for p in paths:
+    complement_picture = 'Graphics[{' + ','.join(cuff_circles+[outside_circle]) + '}]'
+    path_pictures = []
+    colors = ['Blue','Red','Green', 'Yellow','Cyan','Magenta']
+    for pi,p in enumerate(paths):
       start_point = t_along_circle((0.5,0.55), p.start_t/2.0)
       mid_points = []
+      path_drawing = []
       for i in xrange(len(p.seams)):
         si = p.seams[i]
         if si==0:
@@ -99,15 +114,29 @@ class CantorSetComplement:
       if len(p.seams)%2 == 1:
         end_point = (end_point[0], -end_point[1])
       if len(p.seams) == 0:
-        lines.append( 'Line[{{'+str(start_point[0])+','+str(start_point[1])+'},{'+str(end_point[0])+','+str(end_point[1])+'}}]')
+        C = circle_between_R_and_point(end_point[0], start_point)
+        if C == None:
+          path_drawing.append( 'Line[{{'+str(start_point[0])+','+str(start_point[1])+'},{'+str(end_point[0])+','+str(end_point[1])+'}}]')
+        else:
+          c,r,a1,a2 = C
+          path_drawing.append( 'Circle[{'+str(c)+',0},'+str(r)+',{' + str(a1) + ','+str(a2) + '}]' )
       else:
-        lines.append('Line[{{'+str(start_point[0]) + ',' + str(start_point[1])+'},{'+str(mid_points[0])+',0}}]')
+        C = circle_between_R_and_point(mid_points[0], start_point)
+        if C==None:
+          path_drawing.append('Line[{{'+str(start_point[0]) + ',' + str(start_point[1])+'},{'+str(mid_points[0])+',0}}]')
+        else:
+          c,r,a1,a2 = C
+          path_drawing.append( 'Circle[{'+str(c)+',0},'+str(r)+',{' + str(a1) + ','+str(a2) + '}]' )
         for i in xrange(len(mid_points)-1):
           c = (mid_points[i]+mid_points[i+1])/2.0
           r = (abs(mid_points[i+1]-mid_points[i]))/2.0
-          lines.append('Circle[{'+str(c)+',0},'+str(r)+',' + ('{Pi,2*Pi}]' if i%2==0 else '{0,Pi}]'))
-        lines.append('Line[{{'+str(mid_points[-1])+',0},{'+str(end_point[0])+','+str(end_point[1])+'}}]')
-    return ','.join(cuff_circles+[outside_circle]+lines)
+          path_drawing.append('Circle[{'+str(c)+',0},'+str(r)+',' + ('{Pi,2*Pi}]' if i%2==0 else '{0,Pi}]'))
+        c = (mid_points[-1]+end_point[0])/2.0
+        r = (abs(end_point[0]-mid_points[-1]))/2.0
+        #path_drawing.append('Line[{{'+str(mid_points[-1])+',0},{'+str(end_point[0])+','+str(end_point[1])+'}}]')
+        path_drawing.append('Circle[{'+str(c)+',0},'+str(r)+',' + ('{Pi,2*Pi}]' if len(p.seams)%2==1 else '{0,Pi}]'))
+      path_pictures.append( 'Graphics[{' + colors[pi%len(colors)] + ',' + ','.join(path_drawing) + '}]' )
+    return 'Show[' + complement_picture + ',' + ','.join(path_pictures) + ']'
     
     
 
