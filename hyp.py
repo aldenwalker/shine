@@ -88,6 +88,29 @@ def tri_angle_deriv(L, i, j):
   return num/den
 
 
+def reflect_in_geodesic(c,r,pt):
+  z1 = c-r
+  z2 = c+r
+  d = math.sqrt(z2-z1)
+  A = mobius.MobiusTrans(1/d, -z1/d, 1/d, -z2/d)
+  apt = A(pt)
+  spt = complex(-apt.real, apt.imag)
+  ans = A.inverse()(spt)
+  return ans
+
+def circle_intersection_angle(c1, r1, c2, r2):
+  """return the angle in c1 where they intersect"""
+  if c2 > c1:
+    d = c2-c1
+    theta = math.acos((r1**2+d**2-r2**2)/(2*r1*d))
+    return theta
+  else:
+    d = c1-c2
+    theta = math.acos((r1**2+d**2-r2**2)/(2*r1*d))
+    return math.pi-theta
+
+
+
 class HypGeodesic:
   def __init__(self, center, radius):
     self.center = center
@@ -225,6 +248,12 @@ class HypGeodesicInterval:
     #y1 Cosh[d] + Sqrt[-y1^2 + y1^2 Cosh[d]^2]
     p = complex(0, math.cosh(d) + math.sqrt(math.cosh(d)**2 - 1))
     return M.inverse()(p)
+  
+  def euclidean_intersection_t(self, other):
+    print "Intersecting circles", self.circ_center, self.circ_radius, other.circ_center, other.circ_radius
+    ang = circle_intersection_angle(self.circ_center, self.circ_radius, other.circ_center, other.circ_radius)
+    print "Got angle: ", ang
+    return (ang-self.circ_angle1)/(self.circ_angle2-self.circ_angle1)
   
   def __repr__(self):
     return str(self)

@@ -55,6 +55,76 @@ class CantorSetPath:
     self.start_t = 0.5
     self.seam_ts = [0.5 for s in seams]
     self.end_t = 0.5
+  def sort(self):
+    def circle_cmp(a,b,c):
+      return (a<b and b<c) or (c<a and a<b) or (b<c and c<a)
+    def dir_cmp(v1,v2):
+      i1, dir1 = v1
+      p11 = (1 if dir1 else -1)
+      i2, dir2 = v2
+      p12 = (1 if dir2 else -1)
+      if self.seams[i1]!=self.seams[i2]:
+        return None
+      steps = 0
+      while True:
+        print "Current:", i1, i2, self.seams[i1], self.seams[i2]
+        if i1 == len(self.seams)-1 and dir1:
+          next_1 = 2*self.end+1
+        elif i1 ==0 and not dir1:
+          next_1 = -1
+        else:
+          next_1 = 2*self.seams[i1+p11]
+        if i2 == len(self.seams)-1 and dir2:
+          next_2 = 2*self.end+1
+        elif i2 ==0 and not dir2:
+          next_2 = -1
+        else:
+          next_2 = 2*self.seams[i2+p12]
+        if next_1 != next_2:
+          break
+        i1 += p11
+        i2 += p12
+        steps += 1
+      ontop = ((i1%2 != 0) == dir1)
+      print "Comparing ", next_1, 2*self.seams[i1], next_2, "got", circle_cmp(next_1, 2*self.seams[i1], next_2)
+      return ( circle_cmp(next_1, 2*self.seams[i1], next_2), steps )
+    def cmp_places(v1, v2):
+      i1,dir1 = v1
+      i2,dir2 = v2
+      F,Fsteps = dir_cmp(v1, v2)
+      B,Bsteps = dir_cmp((i1,not dir1), (i2,not dir2))
+      print "Comparing ", v1, v2, " got ", F,Fsteps, B,Bsteps
+      Fswapped = (Fsteps%2==1) != F #xor
+      Bswapped = (Bsteps%2==1) != B #xor
+      print "Swapping to: ", Fswapped, Bswapped
+      F = Fswapped
+      B = Bswapped
+      if F and B:
+        return -1
+      elif (not F) and (not B):
+        return 1
+      elif Fsteps <= Bsteps:
+        return (-1 if F else 1)
+      else:
+        return (-1 if B else 1)
+    decorated = [(i, i%2!=0) for i in xrange(len(self.seams))]
+    print "Decorated: ", decorated
+    groups = dict()
+    for (i,dir) in decorated:
+      if self.seams[i] in groups:
+        groups[self.seams[i]].append( (i,dir) )
+      else:
+        groups[self.seams[i]] = [ (i,dir) ]
+    print "Groups: ", groups
+    for si in groups:
+      groups[si].sort(cmp=cmp_places)
+      print "Sorted ", si, groups[si]
+      for ii,(i,dir) in enumerate(groups[si]):
+        self.seam_ts[i] = (float(ii)+1.0)/(len(groups[si])+1.0)
+    
+      
+    
+    
     
 
 class CantorSetComplement:
@@ -137,6 +207,40 @@ class CantorSetComplement:
         path_drawing.append('Circle[{'+str(c)+',0},'+str(r)+',' + ('{Pi,2*Pi}]' if len(p.seams)%2==1 else '{0,Pi}]'))
       path_pictures.append( 'Graphics[{' + colors[pi%len(colors)] + ',' + ','.join(path_drawing) + '}]' )
     return 'Show[' + complement_picture + ',' + ','.join(path_pictures) + ']'
+    
+  def geoify(self, p):
+    while True:
+      max_t_diff = 0
+      for i in xrange(len(p.seams)):
+        if i==0:
+          prev_geo = self.cuffs[p.start]
+          prev_pt = prev_geo.pt_along_euclidean(p.start_t)
+        else:
+          prev_geo = self.seams[p.seams[i-1]]
+          prev_pt = prev_geo.pt_along_euclidean(p.seam_ts[i-1])
+        if i==len(p.seams)-1:
+          next_geo = self.cuffs[p.end]
+          next_pt = next_geo.pt_along_euclidean(p.end_t)
+        else:
+          next_geo = self.seams[p.seams[i+1]]
+          next_pt = next_geo.pt_along_euclidean(p.seam_ts[i+1])
+        geo = self.seams[p.seams[i]]
+        current_t = p.seam_ts[i]
+        print "Seam ", i, " current t: ", current_t
+        print "Geo: ", geo
+        print "prev pt: ", prev_pt, " next_pt: ", next_pt
+        reflected_next_pt = hyp.reflect_in_geodesic( geo.circ_center, geo.circ_radius, next_pt )
+        print "Reflected: ", reflected_next_pt
+        crossing_geo = hyp.HypGeodesicInterval(prev_pt, reflected_next_pt)
+        print "Crossing geo: ", crossing_geo
+        next_t = geo.euclidean_intersection_t(crossing_geo)
+        print "Next t: ", next_t
+        t_diff = abs(next_t-current_t)
+        print "t_diff: ", t_diff
+        if t_diff > max_t_diff:
+          max_t_diff = t_diff
+        p.seam_ts[i] = next_t
+      break
     
     
 
