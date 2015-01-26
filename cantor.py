@@ -45,8 +45,45 @@ def subdivide_circle(center, radius, depth, removal_fraction=1/3.0):
 
 
 
+class CantorSetPathBraid(object):
+  def __init__(self, i,j):
+    self.i = i
+    self.j = j
+    self.min = min(i,)
+    self.max = max(i,j)
+    
+  def new_crossing_seams(self, x1, x2, ontop, end_on_cuff=False):
+    start_inside = (self.min < x1 and x1 <= self.max)
+    end_inside = (self.min < x2 and x2 <= self.max)
+    if start_inside == end_inside:
+      return [x2]
+    if ontop:
+      if start_inside:
+        return [self.max, self.max+1, x2]
+      else:
+        return [self.max+1, self.max, x2]
+    else:
+      if start_inside:
+        return [self.min+1, self.min, x2]
+      else:
+        return [self.min, self.min+1, x2]
+    
+  def __call__(self, P):
+    new_seams = []
+    new_start = P.start
+    for i in xrange(len(P.seams)):
+      ontop = (i%2==0)
+      s = (P.seams[i-1] if i>0 else P.start)
+      d = P.seams[i]
+      new_seams.extend(self.new_crossing_seams(s,d, ontop))
+    new_seams.extend(self.new_crossing_seams(P.seams[-1],P.end, ontop, end_on_cuff=True))
+    new_p = CantorSetPath(new_start, new_seams[:-1], new_seams[-1])
+    new_p.simplify()
+    return new_p
 
-class CantorSetPath:
+
+
+class CantorSetPath(object):
   def __init__(self, start, seams, end):
     self.start = start
     self.seams = seams
@@ -55,6 +92,14 @@ class CantorSetPath:
     self.start_t = 0.5
     self.seam_ts = [0.5 for s in seams]
     self.end_t = 0.5
+  
+  def simplify(self):
+    i=0
+    while i<len(self.seams)-1:
+      if self.seams[i] == self.seams[i+1]:
+        del self.seams[i+1]
+        del self.seams[i]
+  
   def sort(self):
     def circle_cmp(a,b,c):
       return (a<b and b<c) or (c<a and a<b) or (b<c and c<a)
@@ -243,59 +288,6 @@ class CantorSetComplement:
       break
     
     
-
-
-
-
-def cantor_set_complement(n, removal_fraction=1/3.0):
-  C = cantor_set_circles(n, removal_fraction)
-  big_circle = (0.5, 5.0)
-  print C
-  bottom_seams = [hyp.HypGeodesicInterval.orthogonal_to_geodesics(C[i], C[i+1]) for i in xrange(len(C)-1)]
-  print bottom_seams
-  left_seam = hyp.HypGeodesicInterval.orthogonal_to_geodesics(big_circle, C[0])
-  right_seam = hyp.HypGeodesicInterval.orthogonal_to_geodesics(C[-1], big_circle)
-  print left_seam, right_seam
-  seams = [left_seam] + bottom_seams + [right_seam]
-  cuffs = [hyp.HypGeodesicInterval(seams[i].end, seams[i+1].start) for i in xrange(len(seams)-1)]
-  top_cuff = hyp.HypGeodesicInterval(seams[-1].end, seams[0].start)
-  print "Cuff lengths: ", [x.length for x in cuffs+[top_cuff]]
-  print "Seam lengths: ", [x.length for x in seams]
-  print ','.join([x.mathematica_string() for x in seams] + [x.mathematica_string('Red') for x in cuffs + [top_cuff]])
-  #there's one vertex for every seam and cuff
-  #starts at the left seam beginning, and goes around
-  #make an edge for the each seam
-  V = []
-  E = []
-  h_lens = []
-  cuff_top_edges = []
-  cuff_bottom_edges = []
-  
-  for i in xrange(len(seams)):
-    E.append( tsurf.Edge(len(V),len(V)+1, None, None) )
-    h_lens.append( seams[i].length )
-    V.append( tsurf.Vertex([],[]) )
-    V.append( tsurf.Vertex([],[]) )
-  for i in xrange(len(cuffs)):
-    cuff_top_edges.append( len(E) )
-    E.append( tsurf.Edge(2*i+1, 2*i+2, tsurf.BD, None) )
-    h_lens.append( cuffs[i].length )
-    cuff_bottom_edges.append( len(E) )
-    E.append( tsurf.Edge(2*i+2, 2*i+1, tsurf.BD, None) )
-    h_lens.append(cuffs[i].length )
-  cuff_top_edges.append( len(E) )
-  E.append( tsurf.Edge(len(V)-1, 0, tsurf.BD, None) )
-  h_lens.append( top_cuff.length )
-  cuff_bottom_edges.append( len(E) )
-  E.append( tsurf.Edge(0, len(V)-1, tsurf.BD, None) )
-  h_lens.append( top_cuff.length )
-  
-    
-  [tsurf.Vertex([],[]) for i in xrange(2*len(seams))]
-
-
-
-
 
 
 
