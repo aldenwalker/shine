@@ -49,11 +49,29 @@ class CantorSetPathBraid(object):
   def __init__(self, i,j):
     self.i = i
     self.j = j
-    self.min = min(i,)
+    self.min = min(i,j)
     self.max = max(i,j)
+    self.rightward = (self.i < self.j)
+      
     
   def new_crossing_seams(self, x1, x2, ontop, end_on_cuff=False):
+    if not self.rightward:
+      ontop = not ontop
     start_inside = (self.min < x1 and x1 <= self.max)
+    if end_on_cuff:
+      if x2 != self.i and x2 != self.j:
+        pass #it acts like any other one
+      else:
+        if ontop:
+          if start_inside:
+            return ([self.max, self.max] if x2 == self.min else [self.max, self.min])
+          else:
+            return ([self.max+1, self.max] if x2 == self.min else [self.max+1, self.min])
+        else:
+          if start_inside:
+            return ([self.min+1, self.min] if x2 == self.max else [self.min+1, self.max])
+          else:
+            return ([self.min, self.min] if x2 == self.max else [self.min, self.max])
     end_inside = (self.min < x2 and x2 <= self.max)
     if start_inside == end_inside:
       return [x2]
@@ -69,14 +87,20 @@ class CantorSetPathBraid(object):
         return [self.min, self.min+1, x2]
     
   def __call__(self, P):
+    print "Acting on ", P
     new_seams = []
     new_start = P.start
     for i in xrange(len(P.seams)):
       ontop = (i%2==0)
       s = (P.seams[i-1] if i>0 else P.start)
       d = P.seams[i]
+      print "Acting on seams", s,d
       new_seams.extend(self.new_crossing_seams(s,d, ontop))
-    new_seams.extend(self.new_crossing_seams(P.seams[-1],P.end, ontop, end_on_cuff=True))
+      print "New seams total: ", new_seams
+    if len(P.seams)>0:
+      new_seams.extend(self.new_crossing_seams(P.seams[-1],P.end, len(P.seams)%2==0, end_on_cuff=True))
+    else:
+      new_seams.extend(self.new_crossing_seams(P.start,P.end, True, end_on_cuff=True))
     new_p = CantorSetPath(new_start, new_seams[:-1], new_seams[-1])
     new_p.simplify()
     return new_p
@@ -93,12 +117,20 @@ class CantorSetPath(object):
     self.seam_ts = [0.5 for s in seams]
     self.end_t = 0.5
   
+  def __str__(self):
+    return repr(self)
+  
+  def __repr__(self):
+    return 'CantorSetPath(' + str(self.start) + ',' + str(self.seams) + ',' + str(self.end) + ')'
+  
   def simplify(self):
     i=0
     while i<len(self.seams)-1:
       if self.seams[i] == self.seams[i+1]:
         del self.seams[i+1]
         del self.seams[i]
+      else:
+        i += 1
   
   def sort(self):
     def circle_cmp(a,b,c):
