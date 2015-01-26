@@ -26,7 +26,68 @@ def circle_between_R_and_point(x,p):
     return (a-d, x-a+d, 0, math.atan2(b,d))
     
 
+def circle_between_points(p1, p2):
+  x1,y1 = p1
+  x2,y2 = p2
+  if abs(x1-x2) < 0.001:
+    return None
+  if x2 < x1:
+    return circle_between_points(p2, p1)
+  Q1 = x2-x1
+  Q2 = (y2**2-y1**2)/(x2-x1)
+  a = (Q1+Q2)/2.0
+  b = (Q1-Q2)/2.0
+  b = (-b if b<0 else b)
+  c = x1 + a
+  r = math.sqrt(a**2 + y1**2)
+  if x1 + a < x2:
+    a1 = math.atan2(y2, b)
+    a2 = math.pi-math.atan2(y1,a)
+  else:
+    a1 = math.pi-math.atan2(y2,b)
+    a2 = math.pi-math.atan2(y1,a)
+  return (c,r,a1,a2)
+    
 
+
+###########################################################################
+# return a string which graphics a mathematica drawing of the path between 
+# the points 
+###########################################################################
+def mathematica_path(pts, col):
+  ans = []
+  for i in xrange(len(pts)-1):
+    p1 = pts[i]
+    p2 = pts[i+1]
+    p1R = not isinstance(p1, tuple)
+    p2R = not isinstance(p2, tuple)
+    if p1R and p2R:
+      c = (p1+p2)/2.0
+      r = abs(p1-p2)/2.0
+      ans.append( 'Circle[{' + str(c) + ',0}, ' + str(r) + (',{0,Pi}' if i%2==0 else ',{Pi,2*Pi}') + ']')
+    elif p1R or p2R:
+      if p1R:
+        C = circle_between_R_and_point(p1, p2)
+      else:
+        C = circle_between_R_and_point(p2, p1)
+      if C == None:
+        ans.append('Line[{{' + str(p1) + ',0},{' + str(p2[0]) + ',' + str(p2[1]) + '}}]')
+      else:
+        #we don't need to negate because the points must already have taken this into account
+        c,r,a1,a2 = C
+        ans.append('Circle[{' + str(c) + ',0},' + str(r) + ',{' + str(a1) + ',' + str(a2) + '}]')
+    else:
+      C = circle_between_points(p1, p2)
+      if C == None:
+        ans.append('Line[{{' + str(p1[0]) + ',' + str(p1[1]) + '},{' + str(p2[0]) + ',' + str(p2[1]) + '}}]')
+      else:
+        c,r,a1,a2 = C
+        if i%2==1:
+          a1 = -a1
+          a2 = -a2
+        ans.append('Circle[{' + str(c) + ',0},' + str(r) + ',{' + str(a1) + ',' + str(a2) + '}]')
+  return 'Graphics[{' + col + ',' + ','.join(ans) + '}]'
+      
 ###########################################################################
 # create 2^n circles which go over the standard Cantor set intervals
 # they are returned as a (center, radius) list
@@ -43,17 +104,32 @@ def subdivide_circle(center, radius, depth, removal_fraction=1/3.0):
   return subdivide_circle(new_c1, new_r, depth-1, removal_fraction) + \
          subdivide_circle(new_c2, new_r, depth-1, removal_fraction)
 
+##########################################################################
+# create uniform circles
+##########################################################################
+def uniform_circles(n, radius_fraction):
+  center_gap = 1.0/float(n+1.0)
+  rad = radius_fraction * center_gap
+  ans = [((i+1)*center_gap, rad) for i in xrange(n)]
+  return ans
 
-
-class CantorSetPathBraid(object):
+##########################################################################
+# braid 
+##########################################################################
+class DiskComplementHomeo(object):
   def __init__(self, i,j):
     self.i = i
     self.j = j
     self.min = min(i,j)
     self.max = max(i,j)
     self.rightward = (self.i < self.j)
-      
-    
+  
+  def __repr__(self):
+    return 'DiskComplementHomeo(' + str(self.i) + ',' + str(self.j) + ')'
+  
+  def __str__(self):
+    return repr(self)
+  
   def new_crossing_seams(self, x1, x2, ontop, end_on_cuff=False):
     if not self.rightward:
       ontop = not ontop
@@ -101,13 +177,15 @@ class CantorSetPathBraid(object):
       new_seams.extend(self.new_crossing_seams(P.seams[-1],P.end, len(P.seams)%2==0, end_on_cuff=True))
     else:
       new_seams.extend(self.new_crossing_seams(P.start,P.end, True, end_on_cuff=True))
-    new_p = CantorSetPath(new_start, new_seams[:-1], new_seams[-1])
+    new_p = DiskComplementBraid(new_start, new_seams[:-1], new_seams[-1])
     new_p.simplify()
     return new_p
 
 
-
-class CantorSetPath(object):
+############################################################################
+# a path in a disk complement
+############################################################################
+class DiskComplementBraid(object):
   def __init__(self, start, seams, end):
     self.start = start
     self.seams = seams
@@ -121,7 +199,7 @@ class CantorSetPath(object):
     return repr(self)
   
   def __repr__(self):
-    return 'CantorSetPath(' + str(self.start) + ',' + str(self.seams) + ',' + str(self.end) + ')'
+    return 'DiskComplementBraid(' + str(self.start) + ',' + str(self.seams) + ',' + str(self.end) + ')'
   
   def simplify(self):
     i=0
@@ -131,7 +209,9 @@ class CantorSetPath(object):
         del self.seams[i]
       else:
         i += 1
-  
+  #########################################################################
+  # sort a single path 
+  #########################################################################
   def sort(self):
     def circle_cmp(a,b,c):
       return (a<b and b<c) or (c<a and a<b) or (b<c and c<a)
@@ -198,12 +278,173 @@ class CantorSetPath(object):
       print "Sorted ", si, groups[si]
       for ii,(i,dir) in enumerate(groups[si]):
         self.seam_ts[i] = (float(ii)+1.0)/(len(groups[si])+1.0)
-    
+  
+  ######################################################################
+  # sort several paths
+  ######################################################################
+  @staticmethod
+  def sort_multiple(L):
+    def circle_cmp(a,b,c):
+      return (a<b and b<c) or (c<a and a<b) or (b<c and c<a)
+    def dir_cmp(v1,v2):
+      i1, j1, dir1 = v1
+      p11 = (1 if dir1 else -1)
+      i2, j2, dir2 = v2
+      p12 = (1 if dir2 else -1)
+      if L[i1].seams[j1] != L[i2].seams[j2]:
+        return None
+      steps = 0
+      while True:
+        print "Current:", i1, j1, i2, j2, L[i1].seams[j1], L[i2].seams[j2]
+        done_1 = False
+        done_2 = False
+        if j1 == len(L[i1].seams)-1 and dir1:
+          next_1 = 2*L[i1].end+1
+          done_1 = True
+        elif j1 == 0 and not dir1:
+          next_1 = 2*L[i1].start+1
+          done_1 = True
+        else:
+          next_1 = 2*L[i1].seams[j1+p11]
+        if j2 == len(L[i2].seams)-1 and dir2:
+          next_2 = 2*L[i2].end+1
+          done_2 = True
+        elif j2 == 0 and not dir2:
+          next_2 = 2*L[i2].start+1
+          done_2 = True
+        else:
+          next_2 = 2*L[i2].seams[j2+p12]
+        if done_1 and done_2 and next_1 == next_2:
+          return None, steps
+        if next_1 != next_2:
+          break
+        j1 += p11
+        j2 += p12
+        steps += 1
+      ontop = ((j1%2 != 0) == dir1)
+      prev_loc = 2*L[i1].seams[j1]
+      print "Comparing ", next_1, prev_loc, next_2, "got", circle_cmp(next_1, prev_loc, next_2)
+      return ( circle_cmp(next_1, prev_loc, next_2), steps )
+    def cmp_places(v1, v2):
+      i1,j1,dir1 = v1
+      i2,j2,dir2 = v2
+      F,Fsteps = dir_cmp(v1, v2)
+      B,Bsteps = dir_cmp((i1,j1, not dir1), (i2, j2, not dir2))
+      print "Comparing ", v1, v2, " got ", F,Fsteps, B,Bsteps
+      if F == None:
+        Bswapped = (Bsteps%2==1) != B
+        return (-1 if Bswapped else 1)
+      elif B == None:
+        Fswapped = (Fsteps%2==1) != F
+        return (-1 if Fswapped else 1)
+      Fswapped = (Fsteps%2==1) != F #xor
+      Bswapped = (Bsteps%2==1) != B #xor
+      print "Swapping to: ", Fswapped, Bswapped
+      F = Fswapped
+      B = Bswapped
+      if F and B:
+        return -1
+      elif (not F) and (not B):
+        return 1
+      elif Fsteps <= Bsteps:
+        return (-1 if F else 1)
+      else:
+        return (-1 if B else 1)
+    decorated = [(i, j, j%2!=0) for i in xrange(len(L)) for j in xrange(len(L[i].seams))]
+    print "Decorated: ", decorated
+    groups = dict()
+    for (i,j,dir) in decorated:
+      if L[i].seams[j] in groups:
+        groups[L[i].seams[j]].append( (i,j,dir) )
+      else:
+        groups[L[i].seams[j]] = [ (i,j,dir) ]
+    print "Groups: ", groups
+    for si in groups:
+      groups[si].sort(cmp=cmp_places)
+      print "Sorted ", si, groups[si]
+      for ii,(i,j,dir) in enumerate(groups[si]):
+        L[i].seam_ts[j] = (float(ii)+1.0)/(len(groups[si])+1.0)
       
     
     
     
+#########################################################################
+# a disk complement
+#########################################################################
+class DiskComplement:
+  def __init__(self, kind='uniform', **kwargs):
+    self.kind = kind
+    if kind == 'cantor':
+      self.depth = kwargs.get('depth', 4)
+      self.removal_fraction = kwargs.get('removal_fraction', 1/3.0)
+      self.C = cantor_set_circles(self.depth, self.removal_fraction)
+      self.big_circle = (0.5, 0.6)
+    else:
+      self.n = kwargs.get('n', 4)
+      self.radius_fraction = kwargs.get('radius_fraction', 0.15)
+      self.C = uniform_circles(self.n, self.radius_fraction)
+      self.big_circle = (0.5, 0.6)
+  
+  def __repr__(self):
+    ans = 'DiskComplement(kind=' + str(self.kind)
+    if self.kind == 'uniform':
+      ans += ', n=' + str(self.n) + ', radius_fraction=' + str(self.radius_fraction) + ')'
+    else:
+      ans += ', depth=' + str(self.depth) + ', removal_fraction=' + str(self.removal_fraction) + ')'
+    return ans
+  
+  def __str__(self):
+    return repr(self)
+  
+  def mathematica_picture(self, paths, big_circle=False):
+    draw_big_circle = self.big_circle
+    cuff_circles = ['Circle[{'+str(c[0])+',0},'+str(c[1])+']' for c in self.C]
+    outside_circle = 'Circle[{'+str(draw_big_circle[0])+',0},'+str(draw_big_circle[1])+']'
+    if big_circle:
+      complement_picture = 'Graphics[{' + ','.join(cuff_circles+[outside_circle]) + '}]'
+    else:
+      complement_picture = 'Graphics[{' + ','.join(cuff_circles) + '}]'
+    path_pictures = []
+    colors = ['Blue','Red','Green', 'Yellow','Cyan','Magenta']
+    for pi,p in enumerate(paths):
+      if p.start == -1 or p.start == len(self.C):
+        start_point = t_along_circle(draw_big_circle, p.start_t/2.0)
+      else:
+        start_point = t_along_circle(self.C[p.start], p.start_t/2.0)
+      mid_points = []
+      for i in xrange(len(p.seams)):
+        si = p.seams[i]
+        if si==0:
+          p1 = draw_big_circle[0]-draw_big_circle[1]
+          p2 = self.C[0][0]-self.C[0][1]
+          mid_points.append( (1-p.seam_ts[i])*p1 + p.seam_ts[i]*p2 )
+        elif si == len(self.C):
+          p1 = self.C[-1][0]+self.C[-1][1]
+          p2 = draw_big_circle[0]+draw_big_circle[1]
+          mid_points.append( (1-p.seam_ts[i])*p1 + p.seam_ts[i]*p2 )
+        else:
+          p1 = self.C[si-1][0]+self.C[si-1][1]
+          p2 = self.C[si][0]-self.C[si][1]
+          mid_points.append( (1-p.seam_ts[i])*p1 + p.seam_ts[i]*p2 )
+      if p.end == -1 or p.end == len(self.C):
+        end_point = t_along_circle(draw_big_circle, p.end_t/2.0)
+      else:
+        end_point = t_along_circle(self.C[p.end], (1 if len(p.seams)%2==0 else -1)*p.end_t/2.0)
+      all_points = [start_point] + mid_points + [end_point]
+      this_path_picture = mathematica_path(all_points, colors[pi%len(colors)])
+      path_pictures.append(this_path_picture)
+    return 'Show[' + complement_picture + ',' + ','.join(path_pictures) + ']'
+      
+      
+      
 
+
+
+
+
+#########################################################################
+# a cantor set complement with a hyperbolic structure
+#########################################################################
 class CantorSetComplement:
   def __init__(self, n, removal_fraction=1/3.0):
     self.C = cantor_set_circles(n, removal_fraction)
