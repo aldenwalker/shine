@@ -1,11 +1,9 @@
-##########################################################################
-# create a complement of the Cantor set to depth n (with 1+2^n boundaries)
-##########################################################################
-
 import hyp
 import gsurf
 import math
 from signedind import SignedInd as SI
+
+import Tkinter as tk
 
 
 def xor(a,b):
@@ -95,7 +93,45 @@ def mathematica_path(pts, col, start_up):
           a2 = -a2
         ans.append('Circle[{' + str(c) + ',0},' + str(r) + ',{' + str(a1) + ',' + str(a2) + '}]')
   return 'Graphics[{' + col + ',' + ','.join(ans) + '}]'
-      
+
+###########################################################################
+# return a list of the circles in a path
+###########################################################################
+def drawn_path(pts, start_up):
+  ans = []
+  for i in xrange(len(pts)-1):
+    p1 = pts[i]
+    p2 = pts[i+1]
+    p1R = not isinstance(p1, tuple)
+    p2R = not isinstance(p2, tuple)
+    if p1R and p2R:
+      c = (p1+p2)/2.0
+      r = abs(p1-p2)/2.0
+      ans.append( ( ('circ', (c,0), r, 0, math.pi) if xor(not start_up, i%2==0) else ('circ',(c,0),r,math.pi,2*math.pi)) )
+    elif p1R or p2R:
+      if p1R:
+        C = circle_between_points((p1,0), p2)
+      else:
+        C = circle_between_points((p2,0), p1)
+      if C == None:
+        ans.append( ('line', p1, 0, p2[0], p2[1]) )
+      else:
+        #we don't need to negate because the points must already have taken this into account
+        c,r,a1,a2 = C
+        ans.append( ('circ', (c,0),r,a1,a2) )
+    else:
+      C = circle_between_points(p1, p2)
+      if C == None:
+        ans.append( ('line', p1[0], p1[1], p2[0], p2[1]) )
+      else:
+        c,r,a1,a2 = C
+        if i%2==1:
+          a1 = -a1
+          a2 = -a2
+        ans.append( ('circ', (c,0), r, a1, a2) )
+  return ans
+
+
 ###########################################################################
 # create 2^n circles which go over the standard Cantor set intervals
 # they are returned as a (center, radius) list
@@ -382,6 +418,8 @@ class DiskComplement:
       self.C = uniform_circles(self.n, self.radius_fraction)
       self.big_circle = (0.5, 0.6)
     self.braids = []
+    self.braids_are_sorted = False
+    self.window = None
     
   def __repr__(self):
     ans = 'DiskComplement(kind=' + str(self.kind)
@@ -405,21 +443,38 @@ class DiskComplement:
         self.braids.append(DiskComplementBraid(b[0], b[1:-1], b[-1]))
       else:
         self.braids.append(b)
-    self.braids[-1].simplify(rotate_ends=True)
+      self.braids[-1].simplify(rotate_ends=True)
+    self.braids_are_sorted = False 
+    self.update_drawing()
+  
+  def remove_braid(self, *args):
+    sa = sorted(args, reversed=True)
+    for bi in sa:
+      if bi < len(self.braids):
+        del self.braids[bi]
+    self.braids_are_sorted = False
+    self.update_drawing()
+  
+  def clear_braids(self):
+    self.braids = []
+    self.braids_are_sorted = False
+    self.update_drawing()
   
   def apply_homeo(self, *args):
     for h in reversed(args):
       self.braids = [h(b) for b in self.braids]
+    self.braids_are_sorted = False 
+    self.update_drawing()
+      
   
   def mathematica_picture(self, paths=None, big_circle=False):
-    
     if paths == None:
       paths = self.braids
     else:
       paths = paths.extend(self.braids)
-    
-    DiskComplementBraid.sort(paths)
-    
+    if not self.braids_are_sorted:
+      DiskComplementBraid.sort(paths)
+    self.braids_are_sorted = True
     draw_big_circle = self.big_circle
     cuff_circles = ['Circle[{'+str(c[0])+',0},'+str(c[1])+']' for c in self.C]
     outside_circle = 'Circle[{'+str(draw_big_circle[0])+',0},'+str(draw_big_circle[1])+']'
@@ -457,8 +512,97 @@ class DiskComplement:
       this_path_picture = mathematica_path(all_points, colors[pi%len(colors)], p.start_up)
       path_pictures.append(this_path_picture)
     return 'Show[' + complement_picture + ',' + ','.join(path_pictures) + ']'
-      
-      
+  
+  def update_drawing(self):
+    paths = self.braids
+    if not self.braids_are_sorted:
+      DiskComplementBraid.sort(paths)
+    self.braids_are_sorted = True
+    if self.window == None:
+      return
+    self.canvas.delete('all')
+    draw_scale = self.canvas_height / 1.0
+    canvas_center = (self.canvas_width/2, self.canvas_height/2)
+    circ_thickness = 2
+    path_thickness = 1
+    circ_color='black'
+    path_colors = ['Blue','Red','Green', 'Yellow','Cyan','Magenta']
+    draw_big_circle = (0.5,0.5) #self.big_circle
+    for c in self.C:
+      cc = ( (draw_scale*c[0] , canvas_center[1]), draw_scale*c[1])
+      b = (cc[0][0]-cc[1], cc[0][1]-cc[1], cc[0][0]+cc[1], cc[0][1]+cc[1])
+      #self.canvas.create_arc(b[0],b[1],b[2],b[3], start=0.0, extent=360.0, style=tk.ARC, width=circ_thickness, outline=circ_color)
+      self.canvas.create_oval(b[0],b[1],b[2],b[3], width=circ_thickness, outline=circ_color)
+    for pi,p in enumerate(paths):
+      if p.start == -1 or p.start == len(self.C):
+        start_point = t_along_circle(draw_big_circle, p.start_t/2.0)
+      else:
+        start_point = t_along_circle(self.C[p.start], (1 if p.start_up else -1)*p.start_t/2.0)
+      mid_points = []
+      for i in xrange(len(p.seams)):
+        si = p.seams[i]
+        if si==0:
+          p1 = draw_big_circle[0]-draw_big_circle[1]
+          p2 = self.C[0][0]-self.C[0][1]
+          mid_points.append( (1-p.seam_ts[i])*p1 + p.seam_ts[i]*p2 )
+        elif si == len(self.C):
+          p1 = self.C[-1][0]+self.C[-1][1]
+          p2 = draw_big_circle[0]+draw_big_circle[1]
+          mid_points.append( (1-p.seam_ts[i])*p1 + p.seam_ts[i]*p2 )
+        else:
+          p1 = self.C[si-1][0]+self.C[si-1][1]
+          p2 = self.C[si][0]-self.C[si][1]
+          mid_points.append( (1-p.seam_ts[i])*p1 + p.seam_ts[i]*p2 )
+      if p.end == -1 or p.end == len(self.C):
+        end_point = t_along_circle(draw_big_circle, p.end_t/2.0)
+      else:
+        end_point = t_along_circle(self.C[p.end], (1 if xor(not p.start_up, len(p.seams)%2==0) else -1)*p.end_t/2.0)
+      all_points = [start_point] + mid_points + [end_point]
+      this_path_picture = drawn_path(all_points, p.start_up)
+      this_path_col = path_colors[pi%len(path_colors)]
+      for e in this_path_picture:
+        if e[0] == 'line':
+          canvas_pts = [(canvas_center[1]-draw_scale*x if i%2==0 else draw_scale*x) for x in e[1:]]
+          self.canvas.create_line(*canvas_pts, width=path_thickness, outline=this_path_col)
+        else:
+          n, c, r, a1, a2 = e
+          a1 *= 180.0/math.pi
+          a2 *= 180.0/math.pi
+          cc = ( (draw_scale*c[0], canvas_center[1]-draw_scale*c[1]), draw_scale*r)
+          b = (cc[0][0]-cc[1], cc[0][1]-cc[1], cc[0][0]+cc[1], cc[0][1]+cc[1])
+          self.canvas.create_arc(b[0],b[1],b[2],b[3], start=a1, extent=a2-a1, style=tk.ARC, width=path_thickness, outline=this_path_col)
+    
+    
+  def resize_canvas(self, event):
+    self.canvas.config(background='#FFFFFF')
+    self.canvas.config(height=event.height, width=event.width)
+    self.canvas_height = event.height
+    self.canvas_width = event.width
+    self.update_drawing()
+  
+  def unshow(self):
+    self.window.destroy()
+    self.window = None
+    self.canvas = None
+  
+  def show(self):
+    if self.window != None:
+      self.update_drawing()
+      return
+    self.window = tk.Tk()
+    self.window.protocol('WM_DELETE_WINDOW', self.unshow)
+    self.canvas = tk.Canvas(self.window, borderwidth=0)
+    self.canvas.bind('<Configure>', self.resize_canvas)
+    self.canvas.grid(column=0, row=0, rowspan=1, columnspan=1, sticky=tk.W+tk.E+tk.N+tk.S)
+    
+    self.window.rowconfigure(0, weight=1)
+    self.window.columnconfigure(0, weight=1)
+    self.window.geometry('500x500+100+100')
+    self.window.aspect(1,1,1,1)
+    
+    
+    
+    
       
 
 
