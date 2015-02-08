@@ -461,8 +461,15 @@ class DiskComplement:
     self.update_drawing()
   
   def apply_homeo(self, *args):
-    for h in reversed(args):
+    if isinstance(args[0], int):
+      if len(args) != 2:
+        print "If you want to input ints rather than homeos, I need two"
+        return
+      h = DiskComplementHomeo(*args)
       self.braids = [h(b) for b in self.braids]
+    else:
+      for h in reversed(args):
+        self.braids = [h(b) for b in self.braids]
     self.braids_are_sorted = False 
     self.update_drawing()
       
