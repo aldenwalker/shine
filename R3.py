@@ -47,7 +47,7 @@ class Vector:
   def __mul__(self, a):
     return Vector([a*self.x[i] for i in range(3)])  
   
-  def __div__(self, a):
+  def __truediv__(self, a):
     return Vector([self.x[i]/a for i in range(3)])
   
   def __getitem__(self, i):
