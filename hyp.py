@@ -37,7 +37,7 @@ def point_angle_dist(p, A, d):
 
 def tri_angles(L):
   ans = [0, 0, 0]
-  for i in xrange(3):
+  for i in range(3):
     top = math.cosh(L[i])*math.cosh(L[(i+2)%3]) - math.cosh( L[(i+1)%3] )
     bottom = math.sinh(L[i])*math.sinh(L[(i+2)%3])
     ans[i] = math.acos(top/bottom)
@@ -250,9 +250,9 @@ class HypGeodesicInterval:
     return M.inverse()(p)
   
   def euclidean_intersection_t(self, other):
-    print "Intersecting circles", self.circ_center, self.circ_radius, other.circ_center, other.circ_radius
+    print("Intersecting circles", self.circ_center, self.circ_radius, other.circ_center, other.circ_radius)
     ang = circle_intersection_angle(self.circ_center, self.circ_radius, other.circ_center, other.circ_radius)
-    print "Got angle: ", ang
+    print("Got angle: ", ang)
     return (ang-self.circ_angle1)/(self.circ_angle2-self.circ_angle1)
   
   def __repr__(self):
@@ -417,7 +417,7 @@ class EmHypTri(HypTri):
   
   @classmethod
   def from_vertices(cls, em_V):
-    GIs = [HypGeodesicInterval(em_V[i], em_V[(i+1)%3]) for i in xrange(3)]
+    GIs = [HypGeodesicInterval(em_V[i], em_V[(i+1)%3]) for i in range(3)]
     return cls(GIs)
   
   def gi_between_points(self, e1i, e1t, e2i, e2t):

@@ -28,7 +28,7 @@ class GeometricSurface(tsurf.TopSurface):
   @classmethod
   def geometrize_tsurf(cls, TS, verbose=0):
     if TS.euler_char() >= 0:
-      print "Only hyperbolic supported"
+      print("Only hyperbolic supported")
       return
     num_edges = len(TS.e)
     num_verts = len(TS.v)
@@ -50,18 +50,18 @@ class GeometricSurface(tsurf.TopSurface):
       for i,t in enumerate(TS.t):
         Tlens = [x[ei.ind] for ei in t.i_edges]
         Tangles = hyp.tri_angles(Tlens)
-        for j in xrange(3):
+        for j in range(3):
           ans += (Tangles[j] - (6*math.pi/v_vals[t.i_verts[j][0]]))**2
       return ans
     def obj_fun_grad(x):
-      ans = [0 for _ in xrange(len(x))]
+      ans = [0 for _ in range(len(x))]
       v_targets = [6*math.pi/float(len(v.i_edges)) for v in TS.v]
       for i,t in enumerate(TS.t):
         Tlens = [x[ei.ind] for ei in t.i_edges]
         Tangles = hyp.tri_angles(Tlens)
         eis = t.i_edges
-        for j in xrange(3):
-          for k in xrange(3):
+        for j in range(3):
+          for k in range(3):
             ans[eis[k].ind] += 2*(Tangles[j] - v_targets[t.i_verts[j][0]])*hyp.tri_angle_deriv(Tlens, j, k) 
       return ans
     def f(x):
@@ -69,7 +69,7 @@ class GeometricSurface(tsurf.TopSurface):
 
 
 
-    cons = [dict() for _ in xrange(num_verts+3*num_tris )]
+    cons = [dict() for _ in range(num_verts+3*num_tris )]
     #constraints from vertices (angles = 0)
     for i,v in enumerate(TS.v):
       def this_func(x,v=v):
@@ -78,7 +78,7 @@ class GeometricSurface(tsurf.TopSurface):
           ans += hyp.tri_angle( [x[ei.ind] for ei in TS.t[ti].i_edges], j )
         return ans
       def this_jac(x,v=v):
-        ans = [0 for _ in xrange(len(x))]
+        ans = [0 for _ in range(len(x))]
         incident_faces = len(v.i_tris)
         for ti,j in v.i_tris:   #ti is the triangle index, j is the index of this angle in the triangle
           T = TS.t[ti]
@@ -90,21 +90,21 @@ class GeometricSurface(tsurf.TopSurface):
       cons[i]['fun'] = this_func
       cons[i]['jac'] = this_jac
     #constraints from faces (triangle inequalities)
-    for j in xrange(num_tris):
+    for j in range(num_tris):
       Te = TS.t[j].i_edges
-      for k in xrange(3):
+      for k in range(3):
         def this_func(x,Te=Te,k=k):
           return -x[Te[k].ind] + x[Te[(k+1)%3].ind] + x[Te[(k+2)%3].ind] - 1e-5
         def this_jac(x,Te=Te,k=k):
-          ans = [0 for _ in xrange(num_edges)]
+          ans = [0 for _ in range(num_edges)]
           ans[Te[k].ind], ans[Te[(k+1)%3].ind], ans[Te[(k+2)%3].ind] = -1, 1, 1
           return ans
         cons[num_verts + 3*j + k]['type'] = 'ineq'
         cons[num_verts + 3*j + k]['fun'] = this_func
         cons[num_verts + 3*j + k]['jac'] = this_jac
     
-    x0 = [1 for k in xrange(num_edges)]
-    bounds = [(0,None) for i in xrange(num_edges)]
+    x0 = [1 for k in range(num_edges)]
+    bounds = [(0,None) for i in range(num_edges)]
     res = scipy.optimize.minimize(f,                              \
                                   x0,           \
                                   jac=True,                       \
@@ -113,11 +113,11 @@ class GeometricSurface(tsurf.TopSurface):
                                   method='SLSQP',                 \
                                   options={'disp':True,'iprint':verbose, 'maxiter':200})
     if not res.success:
-      print "Failed to find structure"
+      print("Failed to find structure")
       raise ValueError("Couldn't find structure")
       return None
     if verbose>0:
-      print "Found structure"
+      print("Found structure")
     gs = cls(TS, res.x)
     return gs
   
@@ -136,14 +136,14 @@ class GeometricSurface(tsurf.TopSurface):
     self.h_tris = len(self.t)*[None]
     
     #divide each of the previous edges in two
-    for i in xrange(old_ne):
+    for i in range(old_ne):
       e1i, e2i = edges_from_edges[i]
       self.h_lengths[e1i] = self.old_h_lengths[i]/2.0
       self.h_lengths[e2i] = self.old_h_lengths[i]/2.0
     
     #the remaining edges will have their lengths fixed
-    for i in xrange(old_nt):
-      for j in xrange(3):
+    for i in range(old_nt):
+      for j in range(3):
         ell1 = self.old_h_tris[i].lengths[(j-1)%3] / 2.0
         angle = self.old_h_tris[i].angles[j]
         ell2 = self.old_h_tris[i].lengths[j] / 2.0
@@ -151,12 +151,12 @@ class GeometricSurface(tsurf.TopSurface):
         self.h_lengths[new_edge_i] = hyp.tri_opposite_length(ell1, angle, ell2)
     
     if None in self.h_lengths:
-      print "Haven't found all the edges?"
+      print("Haven't found all the edges?")
       raise ValueError("yo moma")
     
     #now the triangles get their lengths from the edges
-    for i in xrange(len(self.t)):
-      self.h_tris[i] = hyp.HypTri( [ self.h_lengths[ self.t[i].i_edges[j].ind ] for j in xrange(3) ] )
+    for i in range(len(self.t)):
+      self.h_tris[i] = hyp.HypTri( [ self.h_lengths[ self.t[i].i_edges[j].ind ] for j in range(3) ] )
 
     return old_TS, vertices_from_edges, edges_from_edges, edges_from_tris, tris_from_tris
   
@@ -210,7 +210,7 @@ class GeometricSurface(tsurf.TopSurface):
   def maximal_angle_deviation(self, EP):
     ma = 0
     lep = len(EP.edges)
-    for i in xrange(lep):
+    for i in range(lep):
       angle = self.angle_at_edge( EP.edges[(i-1)%lep], EP.edge_coords[(i-1)%lep], \
                                   EP.edges[i], EP.edge_coords[i], \
                                   EP.edges[(i+1)%lep], EP.edge_coords[(i+1)%lep] )
@@ -237,7 +237,7 @@ class GeometricSurface(tsurf.TopSurface):
       #print "Default pathing topological path"
       EP = emsurf.EmbeddedPath.from_topological_path(new_TP)
     
-    print ""
+    print("")
     
     #for each edge, do the following:
     # - simplify the loop (remove edge followed by opposite edge)
@@ -328,13 +328,13 @@ class GeometricSurface(tsurf.TopSurface):
         current_EP_index = 0
         #check to see if we are done
         mad = self.maximal_angle_deviation(EP)
-        print "\rMaximum angle deviation:", mad,
+        print("\rMaximum angle deviation:", mad, end=' ')
         sys.stdout.flush()
         if mad < tol:
           break
         
     #########
-    print ""
+    print("")
     return EP
   
   #########################################################################
@@ -413,7 +413,7 @@ class GeometricSurfacePolygon:
       current_tri = (self.GS.e[next_edge.ind].on_left if next_edge.sign>0 else \
                      self.GS.e[next_edge.ind].on_right)[0]
       if current_edge in self.exit_edges:
-        print "We've found an exit edge without hitting the edge we were supposed to!"
+        print("We've found an exit edge without hitting the edge we were supposed to!")
         return 
     return added_edges, added_edge_coords
 
@@ -567,7 +567,7 @@ class LiftedSurface(GeometricSurface):
     #this may overwrite stuff, but it *should* be the same
     IV = new_t.i_verts
     IE = new_t.i_edges
-    for i in xrange(3):
+    for i in range(3):
       #fill in vert
       vi,j = IV[i]
       v = self.em_v[vi]
@@ -616,7 +616,7 @@ class LiftedSurface(GeometricSurface):
     new_es = [None, None, None]
     new_vs = [None, None, None]
     self.t_lifts[0].append(0)
-    for i in xrange(3):
+    for i in range(3):
       new_es[i] = CoveringEdge( (new_t.t.sides[i] if IE[i].sign > 0 else new_t.t.sides[i].reversed()), \
                                 IE[i].ind,                           \
                                 (i if IE[i].sign > 0 else (i+1)%3),          \
@@ -645,7 +645,7 @@ class LiftedSurface(GeometricSurface):
       #partially lifted
       #appears in the cover only once so far
       #isolated topologically
-      lifted = [i for i in xrange(len(self.v)) if len(self.v_lifts[i])>0]
+      lifted = [i for i in range(len(self.v)) if len(self.v_lifts[i])>0]
       partially_lifted = [i for i in lifted if not self.is_vertex_surrounded(i)]
       appears_once = [i for i in partially_lifted if len(self.v_lifts[i])==1]
       isolated = [i for i in appears_once if self.is_isolated_vertex(i)]
@@ -706,30 +706,30 @@ class LiftedSurface(GeometricSurface):
     #when we look at the ith index, we lift the *next* edge
     #this includes the last edge, which is all we care about
     ne = len(TP.edges)
-    for i in xrange(ne):
+    for i in range(ne):
       e1 = TP.edges[i]
       lifted_e1 = lifted_edges[i]
       e2 = TP.edges[(i+1)%ne]
       tri_ind = (self.em_e[lifted_e1.ind].on_left if e1.sign>0 else self.em_e[lifted_e1.ind].on_right)
       if tri_ind == None:
-        print "Something is wrong -- should be a triangle here"
+        print("Something is wrong -- should be a triangle here")
       tri = self.em_t[tri_ind[0]]
       next_edge_ind_in_tri = (self.e[e2.ind].on_right if e2.sign>0 else self.e[e2.ind].on_left)[1]
       next_edge = -tri.i_edges[next_edge_ind_in_tri]
       if next_edge.sign != e2.sign:
-        print "Something is wrong -- edges should have the opposite sign"
+        print("Something is wrong -- edges should have the opposite sign")
       next_tri_ind = (self.em_e[next_edge.ind].on_left if e2.sign>0 else self.em_e[next_edge.ind].on_right)
       if next_tri_ind == None:
         self.lift_triangle_to_lifted_edge(next_edge)
       lifted_edges.append(next_edge)
-    print "Should take", lifted_edges[0], "to", lifted_edges[-1]
-    print "i.e.", self.em_e[lifted_edges[0].ind], "to", self.em_e[lifted_edges[-1].ind]
+    print("Should take", lifted_edges[0], "to", lifted_edges[-1])
+    print("i.e.", self.em_e[lifted_edges[0].ind], "to", self.em_e[lifted_edges[-1].ind])
     GI1 = self.em_e[lifted_edges[0].ind].gi
     GI2 = self.em_e[lifted_edges[-1].ind].gi
     M = mobius.MobiusTrans.unit_tangent_action(GI1.start, GI1.initial_angle, GI2.start, GI2.initial_angle)
-    print "Got mobius: ", M
+    print("Got mobius: ", M)
     GA = M.geodesic_axis()
-    print "Got geodesic axis: ", GA
+    print("Got geodesic axis: ", GA)
     return TP
   
   ##########################################################################

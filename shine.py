@@ -13,10 +13,10 @@ import random
 import collections
 import pickle
 
-import Tkinter as tk
-import tkFileDialog
-import tkMessageBox
-import tkColorChooser
+import tkinter as tk
+import tkinter.filedialog
+import tkinter.messagebox
+import tkinter.colorchooser
 
 def clamp(x):
   """clamp values between 0 and 255"""
@@ -134,7 +134,7 @@ class HypSurfaceVisualizer:
     #the drawing the currently empty (but it will be filled by the canvas Configure)
     self.drawing_items = []
     
-    self.draw_colors = [rand_bright_color() for _ in xrange(100)]
+    self.draw_colors = [rand_bright_color() for _ in range(100)]
   
   
   ######################### drawing functions
@@ -197,7 +197,7 @@ class HypSurfaceVisualizer:
   def draw_triangle(self, t, col):
       #make a polygon with several points per side
       pts = []
-      for i in xrange(3):
+      for i in range(3):
         gi = t.sides[i]
         if gi.vertical:
           num_joints = 1
@@ -206,7 +206,7 @@ class HypSurfaceVisualizer:
           num_joints = int((total_angle/(2*math.pi))*20 + 1)
           EL = gi.Euclidean_length()
           num_joints = int(num_joints*EL+1)
-        for j in xrange(num_joints):
+        for j in range(num_joints):
           pts.append( gi.pt_along_euclidean( float(j)/float(num_joints) ) )
       cpts = [self.draw_complex_to_canvas(p) for p in pts]
       cpts = [x for P in cpts for x in P]
@@ -496,7 +496,7 @@ class Shine:
     self.parent.config(menu=self.menubar)
   
   def open_file(self):
-    filename = tkFileDialog.askopenfilename(parent=self.parent, filetypes=[('Graph or session', '*.pkl *.pgr'),('Planar graph', '*.pgr'),('Saved session', '*.pkl')])
+    filename = tkinter.filedialog.askopenfilename(parent=self.parent, filetypes=[('Graph or session', '*.pkl *.pgr'),('Planar graph', '*.pgr'),('Saved session', '*.pkl')])
     if len(filename) < 5:
       return
     if filename[-3:] == 'pgr':
@@ -513,7 +513,7 @@ class Shine:
         self.loop_displayer.add_loop((word, EP))
       return
     else:
-      tkMessageBox.showerror(title='Error', message='File does not have a .pgr or .pkl extension', parent=self.parent)
+      tkinter.messagebox.showerror(title='Error', message='File does not have a .pgr or .pkl extension', parent=self.parent)
       return
     
     self.reset()
@@ -531,7 +531,7 @@ class Shine:
     self.reset()
   
   def save_session(self):
-    filename = tkFileDialog.asksaveasfilename(parent=self.parent, defaultextension='.pkl', filetypes=[('Saved sessions','*.pkl')])
+    filename = tkinter.filedialog.asksaveasfilename(parent=self.parent, defaultextension='.pkl', filetypes=[('Saved sessions','*.pkl')])
     f = open(filename, 'wb')
     pickle.dump( (self.ES, self.ES_history, self.GS, self.LS, [(ell.word,ell.EP) for ell in self.loop_displayer.loops]), f)
     f.close()
@@ -661,7 +661,7 @@ class Shine:
     if OK.get()==0:
       return
     
-    filename = tkFileDialog.asksaveasfilename(parent=self.parent)
+    filename = tkinter.filedialog.asksaveasfilename(parent=self.parent)
     
     f = (self.emsurf_displayer.write_svg if export_as.get() == 'svg' else self.emsurf_displayer.write_eps)
     
@@ -749,8 +749,8 @@ class ShineGraphDrawer:
     self.canvas_center = (self.canvas_width/2, self.canvas_height/2)
     self.drawing_center = (self.plane_ll[0] + self.plane_width/2, self.plane_ll[1] + self.plane_height/2)
     
-    for i in xrange(-6,7):
-      for j in xrange(-6,7):
+    for i in range(-6,7):
+      for j in range(-6,7):
         pt = self.draw_plane_to_canvas((i,j))
         r = (1 if (i,j)!=(0,0) else 2)
         self.canvas.create_oval(pt[0]-r,pt[1]-r,pt[0]+r,pt[1]+r,fill='#555555',outline='')
@@ -798,7 +798,7 @@ class ShineGraphDrawer:
       ppt2 = self.draw_plane_to_canvas((self.graph.v[e.dest].pt.real,self.graph.v[e.dest].pt.imag))
       di = self.canvas.create_line(ppt1[0], ppt1[1], ppt2[0], ppt2[1], fill='#000000', width=3)
       self.drawing_items_edges[i] = di
-    for i in xrange(len(self.graph.v)):
+    for i in range(len(self.graph.v)):
       if i in self.drawing_items_verts:
         di = self.drawing_items_verts[i]
         self.canvas.itemconfig(di, fill=('#FF0000' if i==self.highlighted_vertex else '#000000'))
@@ -901,7 +901,7 @@ class ShineEmSurfDisplay:
     T_acted_on = [[self.draw_transformation(x) for x in t] for t in self.shine_parent.ES.em_t]
     T_normals = [R3.triangle_normal(t) for t in T_acted_on]
     T_visible = [self.draw_viewer.faces_eye(t[0], T_normals[i]) for i,t in enumerate(T_acted_on)]
-    T_visible_only = [T_acted_on[i] for i in xrange(len(T_visible)) if T_visible[i]]
+    T_visible_only = [T_acted_on[i] for i in range(len(T_visible)) if T_visible[i]]
     T_visible_only = self.draw_viewer.sort_triangles(T_visible_only)
     self.drawing_visible_triangles = T_visible_only
     self.draw_viewer.viewer_grid_init_triangles(T_visible_only)
@@ -909,7 +909,7 @@ class ShineEmSurfDisplay:
     #find the edges which lie on the visible boundary
     edges_on_boundary = dict()
     visible_segments = []
-    for ei in xrange(len(self.shine_parent.ES.e)):
+    for ei in range(len(self.shine_parent.ES.e)):
       left_i, left_i_in_t = self.shine_parent.ES.e[ei].on_left
       right_i, right_i_in_t = self.shine_parent.ES.e[ei].on_right
       left_faces_eye = T_visible[left_i]
@@ -923,8 +923,8 @@ class ShineEmSurfDisplay:
       if visible_subsegments == None:
         continue
       if len(visible_subsegments) > 1:
-        print "We have more than 1 visible subsegment?"
-        print visible_subsegments
+        print("We have more than 1 visible subsegment?")
+        print(visible_subsegments)
         raise ValueError("help")
       edges_on_boundary[ei] = len(visible_segments)
       #self.draw_viewer.viewer_grid_add_segment(visible_subsegments[0], len(visible_segments))
@@ -1103,11 +1103,11 @@ class ShineEmSurfDisplay:
   # euclidean and hyeprbolic lengths of the edges
   #######################################################################
   def triangle_deviation(self, i):
-    embedded_lengths = [ (self.shine_parent.ES.em_t[i][(j+1)%3] - self.shine_parent.ES.em_t[i][j]).norm() for j in xrange(3) ]
-    hyp_lengths = [ self.shine_parent.GS.h_tris[i].lengths[j] for j in xrange(3) ]
+    embedded_lengths = [ (self.shine_parent.ES.em_t[i][(j+1)%3] - self.shine_parent.ES.em_t[i][j]).norm() for j in range(3) ]
+    hyp_lengths = [ self.shine_parent.GS.h_tris[i].lengths[j] for j in range(3) ]
     scaling_factor = hyp_lengths[0] / embedded_lengths[0]
     scaled_lens = [scaling_factor*x for x in embedded_lengths]
-    deviation = sum([ (hyp_lengths[j]-scaled_lens[j])**2 for j in xrange(3) ])
+    deviation = sum([ (hyp_lengths[j]-scaled_lens[j])**2 for j in range(3) ])
     return deviation
   
   def zoom(self, dir):
@@ -1135,7 +1135,7 @@ class ShineEmSurfDisplay:
         pt, am = self.draw_viewer.project_triangle(t)
         canvas_coords = [self.draw_plane_to_canvas(x) for x in pt]
         SVG_d = 'M ' + str(canvas_coords[0][0]) + ' ' + str(canvas_coords[0][1])
-        for i in xrange(1,3):
+        for i in range(1,3):
           SVG_d += ' L ' + str(canvas_coords[i][0]) + ' ' + str(canvas_coords[i][1])
         SVG_d += ' z'
         SVG_command = '<path d="' + SVG_d + '"'
@@ -1169,12 +1169,12 @@ class ShineEmSurfDisplay:
                   ' C ' + str(cp1[0]) + ' ' + str(cp1[1]) + ' ' +\
                           str(cp2[0]) + ' ' + str(cp2[1]) + ' ' +\
                           str(p2[0]) + ' ' + str(p2[1])
-          for i in xrange(1,len(bp)):
+          for i in range(1,len(bp)):
             p1, cp1, cp2, p2 = bp[i]
             SVG_d += ' S ' + ' '.join(map(str, [cp2[0], cp2[1], p2[0], p2[1]]))
         else:
           SVG_d = 'M ' + str(projected_v[0][0]) + ' ' + str(projected_v[0][1])
-          for i in xrange(1,len(projected_v)):
+          for i in range(1,len(projected_v)):
             SVG_d += ' L ' + str(projected_v[i][0]) + ' ' + str(projected_v[i][1])
         SVG_command = '<path d="' + SVG_d + '" stroke="' + col + '" stroke-width="3" stroke-linejoin="round" fill="none"/>\n'
         f.write(SVG_command)
@@ -1193,12 +1193,12 @@ class ShineEmSurfDisplay:
                   ' C ' + str(cp1[0]) + ' ' + str(cp1[1]) + ' ' +\
                           str(cp2[0]) + ' ' + str(cp2[1]) + ' ' +\
                           str(p2[0]) + ' ' + str(p2[1])
-          for i in xrange(1,len(bp)):
+          for i in range(1,len(bp)):
             p1, cp1, cp2, p2 = bp[i]
             SVG_d += ' S ' + ' '.join(map(str, [cp2[0], cp2[1], p2[0], p2[1]]))
         else:
           SVG_d = 'M ' + str(projected_v[0][0]) + ' ' + str(projected_v[0][1])
-          for i in xrange(1,len(projected_v)):
+          for i in range(1,len(projected_v)):
             SVG_d += ' L ' + str(projected_v[i][0]) + ' ' + str(projected_v[i][1])
         SVG_command = '<path d="' + SVG_d + '" stroke="' + col + '" stroke-width="3" stroke-linejoin="round" fill="none"/>\n'
         f.write(SVG_command)
@@ -1220,12 +1220,12 @@ class ShineEmSurfDisplay:
                   ' C ' + str(cp1[0]) + ' ' + str(cp1[1]) + ' ' +\
                           str(cp2[0]) + ' ' + str(cp2[1]) + ' ' +\
                           str(p2[0]) + ' ' + str(p2[1])
-          for i in xrange(1,len(bp)):
+          for i in range(1,len(bp)):
             p1, cp1, cp2, p2 = bp[i]
             SVG_d += ' S ' + ' '.join(map(str, [cp2[0], cp2[1], p2[0], p2[1]]))
         else:
           SVG_d = 'M ' + str(projected_v[0][0]) + ' ' + str(projected_v[0][1])
-          for i in xrange(1,len(projected_v)):
+          for i in range(1,len(projected_v)):
             SVG_d += ' L ' + str(projected_v[i][0]) + ' ' + str(projected_v[i][1])
         SVG_command = '<path d="' + SVG_d + '" stroke="' + col + '" stroke-width="3" stroke-linejoin="round" fill="none"/>\n'
         f.write(SVG_command)
@@ -1256,7 +1256,7 @@ class ShineEmSurfDisplay:
         pt, am = self.draw_viewer.project_triangle(t)
         canvas_coords = [self.draw_plane_to_canvas(x) for x in pt]
         EPS_com = str(canvas_coords[0][0]) + ' ' + str(h-canvas_coords[0][1]) + ' moveto\n'
-        for i in xrange(1,3):
+        for i in range(1,3):
           EPS_com += str(canvas_coords[i][0]) + ' ' + str(h-canvas_coords[i][1]) + ' lineto\n'
         EPS_com += 'closepath\n'
         if surface_mesh_mesh and surface_mesh_shading:
@@ -1287,12 +1287,12 @@ class ShineEmSurfDisplay:
           p1, cp1, cp2, p2 = bp[0]
           EPS_com = str(p1[0]) + ' ' + str(h-p1[1]) + ' moveto\n'
           EPS_com += ' '.join(map(str, [cp1[0], h-cp1[1], cp2[0], h-cp2[1], p2[0], h-p2[1]])) + ' curveto\n'
-          for i in xrange(1,len(bp)):
+          for i in range(1,len(bp)):
             p1, cp1, cp2, p2 = bp[i]
             EPS_com +=  ' '.join(map(str, [cp1[0], h-cp1[1], cp2[0], h-cp2[1], p2[0], h-p2[1]])) + ' curveto\n'
         else:
           EPS_com = str(projected_v[0][0]) + ' ' + str(h-projected_v[0][1]) + ' moveto\n'
-          for i in xrange(1,len(projected_v)):
+          for i in range(1,len(projected_v)):
             EPS_com += str(projected_v[i][0]) + ' ' + str(h-projected_v[i][1]) + ' lineto\n'
         EPS_com += 'stroke\n'
         f.write(EPS_com)
@@ -1308,12 +1308,12 @@ class ShineEmSurfDisplay:
           p1, cp1, cp2, p2 = bp[0]
           EPS_com = str(p1[0]) + ' ' + str(h-p1[1]) + ' moveto\n'
           EPS_com += ' '.join(map(str, [cp1[0], h-cp1[1], cp2[0], h-cp2[1], p2[0], h-p2[1]])) + ' curveto\n'
-          for i in xrange(1,len(bp)):
+          for i in range(1,len(bp)):
             p1, cp1, cp2, p2 = bp[i]
             EPS_com +=  ' '.join(map(str, [cp1[0], h-cp1[1], cp2[0], h-cp2[1], p2[0], h-p2[1]])) + ' curveto\n'
         else:
           EPS_com = str(projected_v[0][0]) + ' ' + str(h-projected_v[0][1]) + ' moveto\n'
-          for i in xrange(1,len(projected_v)):
+          for i in range(1,len(projected_v)):
             EPS_com += str(projected_v[i][0]) + ' ' + str(h-projected_v[i][1]) + ' lineto\n'
         EPS_com += 'stroke\n'
         f.write(EPS_com)
@@ -1334,12 +1334,12 @@ class ShineEmSurfDisplay:
           p1, cp1, cp2, p2 = bp[0]
           EPS_com = str(p1[0]) + ' ' + str(h-p1[1]) + ' moveto\n'
           EPS_com += ' '.join(map(str, [cp1[0], h-cp1[1], cp2[0], h-cp2[1], p2[0], h-p2[1]])) + ' curveto\n'
-          for i in xrange(1,len(bp)):
+          for i in range(1,len(bp)):
             p1, cp1, cp2, p2 = bp[i]
             EPS_com +=  ' '.join(map(str, [cp1[0], h-cp1[1], cp2[0], h-cp2[1], p2[0], h-p2[1]])) + ' curveto\n'
         else:
           EPS_com = str(projected_v[0][0]) + ' ' + str(h-projected_v[0][1]) + ' moveto\n'
-          for i in xrange(1,len(projected_v)):
+          for i in range(1,len(projected_v)):
             EPS_com += str(projected_v[i][0]) + ' ' + str(h-projected_v[i][1]) + ' lineto\n'
         EPS_com += 'stroke\n'
         f.write(EPS_com)
@@ -1388,11 +1388,11 @@ class ShineLoopDisplay:
       
   
   def delete_loop(self, loop_to_delete):
-    for i in xrange(len(self.loops)):
+    for i in range(len(self.loops)):
       if self.loops[i] == loop_to_delete:
         self.frames[i].destroy()
         self.add_loop_button.grid_remove()
-        for j in xrange(i+1, len(self.frames)):
+        for j in range(i+1, len(self.frames)):
           self.frames[j].grid_remove()
           self.frames[j].grid(column=0, row=i+j)
         del self.loops[i]
@@ -1485,7 +1485,7 @@ class ShineLoop:
     self.show = tk.IntVar()
     self.show.set(1)
     self.W_show = tk.Checkbutton(self.tk_parent, text='Show', variable=self.show, command=self.shine_main.emsurf_displayer.canvas_redraw)
-    self.W_color = tk.Button(self.tk_parent, command=lambda :self.set_color(tkColorChooser.askcolor()[1]), bg=self.color )
+    self.W_color = tk.Button(self.tk_parent, command=lambda :self.set_color(tkinter.colorchooser.askcolor()[1]), bg=self.color )
     self.W_geodesicify = tk.Button(self.tk_parent, text='Geoify', command=self.geodesicify)
     self.W_delete = tk.Button(self.tk_parent, text='X', command=lambda : self.shine_parent.delete_loop(self))
     
@@ -1521,7 +1521,7 @@ class ShineLoop:
     self.PPs = []
     T = self.shine_main.emsurf_displayer.drawing_visible_triangles
     
-    V = [self.shine_main.ES.along_edge(self.EP.edges[i].ind, self.EP.edge_coords[i]) for i in xrange(len(self.EP.edges))]
+    V = [self.shine_main.ES.along_edge(self.EP.edges[i].ind, self.EP.edge_coords[i]) for i in range(len(self.EP.edges))]
     V = [self.shine_main.emsurf_displayer.draw_transformation(v) for v in V]
     while (V[0]-V[-1]).norm() < 1e-10:
       del V[-1]
@@ -1801,7 +1801,7 @@ class ShineLoopDrawer:
           self.canvas.delete(di)
         self.path_drawing_items = self.path_drawing_items[:lcpp+1]
       else:
-        for i in xrange(lpdi, lcpp+1):
+        for i in range(lpdi, lcpp+1):
           #print "Adding index", i
           ind = i-1
           coords = self.draw_plane_to_canvas(self.current_plane_path[ind][0][0]) + \
@@ -1815,7 +1815,7 @@ class ShineLoopDrawer:
     di = self.path_drawing_items[0]
     self.canvas.itemconfig(di, activefill=('' if self.current_side=='BOTTOM' else '#FF0000'))
     self.canvas.tag_raise(di) 
-    for i in xrange(len(self.path_drawing_items)):
+    for i in range(len(self.path_drawing_items)):
       di = self.path_drawing_items[i]
       ind = (i-1 if i>0 else 0)
       if self.current_plane_path[ind][-1] == self.current_side:
@@ -1923,7 +1923,7 @@ class ShineHypSurfaceDisplay:
     self.draw_transformation = mobius.MobiusTrans(1,0,0,1)
     self.draw_scale = 50.0
     self.drawing_items = []
-    self.draw_colors = [rand_bright_color() for _ in xrange(100)]
+    self.draw_colors = [rand_bright_color() for _ in range(100)]
   
   ###########################################################################
   # resize the canvas and figure out how big things are
@@ -1974,7 +1974,7 @@ class ShineHypSurfaceDisplay:
       self.propagate_surface()
     
     #draw all the first lifts of the triangles
-    for ti in xrange(len(self.extended_LS.t)):
+    for ti in range(len(self.extended_LS.t)):
       lti = self.extended_LS.t_lifts[ti][0]
       self.draw_triangle(self.extended_LS.em_t[lti].t, '#FFA0A0')
     
@@ -1993,7 +1993,7 @@ class ShineHypSurfaceDisplay:
         continue
       lep = len(ell.EP.edges)
       ES = self.shine_parent.ES
-      for i in xrange(lep):
+      for i in range(lep):
         ip1 = (i+1)%lep
         e1 = ell.EP.edges[i]
         e1t = (ell.EP.edge_coords[i] if e1.sign>0 else 1-ell.EP.edge_coords[i])
@@ -2089,7 +2089,7 @@ class ShineHypSurfaceDisplay:
   def draw_triangle(self, t, col):
       #make a polygon with several points per side
       pts = []
-      for i in xrange(3):
+      for i in range(3):
         gi = t.sides[i].act_by_mobius(self.draw_transformation)
         if gi.vertical:
           num_joints = 1
@@ -2098,7 +2098,7 @@ class ShineHypSurfaceDisplay:
           num_joints = int((total_angle/(2*math.pi))*20 + 1)
           EL = gi.Euclidean_length()
           num_joints = int(num_joints*EL+1)
-        for j in xrange(num_joints):
+        for j in range(num_joints):
           pts.append( gi.pt_along_euclidean( float(j)/float(num_joints) ) )
       cpts = [self.draw_complex_to_canvas(p) for p in pts]
       cpts = [x for P in cpts for x in P]

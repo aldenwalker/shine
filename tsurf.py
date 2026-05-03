@@ -18,8 +18,8 @@ def polygon_vert_out_labels(w):
   Lw = len(w)
   letter_inds = dict([(W,i) for (i,W) in enumerate(w)])
   ans = []
-  done_vert = [False for i in xrange(Lw)]
-  for i in xrange(Lw):
+  done_vert = [False for i in range(Lw)]
+  for i in range(Lw):
     if done_vert[i]:
       continue
     done_vert[i] = True
@@ -82,7 +82,7 @@ class TopologicalPath(object) :
     edge_pair_inserts = dict()
     for ti, t in enumerate(old_TS.t):
       #print "Doing triangle ", ti, t
-      for i in xrange(3):
+      for i in range(3):
         eii = t.i_edges[i]
         eiim1 = t.i_edges[(i-1)%3]
         new_eii = SI(edges_from_edges[eii.ind][0], eii.sign)
@@ -108,7 +108,7 @@ class TopologicalPath(object) :
     Line = len(initial_new_edges)
     #print "Initial new edges: ", initial_new_edges
     #print "Edge pair inserts: ", edge_pair_inserts
-    for i in xrange(Line):
+    for i in range(Line):
       ei = initial_new_edges[i]
       eip1 = initial_new_edges[(i+1)%Line]
       new_edges.append(ei)
@@ -168,11 +168,11 @@ class TopSurface(object) :
     Lw = len(w)
     v_labels = polygon_vert_out_labels(w)
     gens_to_edges = polygon_edge_inds(w)
-    num_outside_edges = max([ei.ind for ei in gens_to_edges.values()])+1
+    num_outside_edges = max([ei.ind for ei in list(gens_to_edges.values())])+1
     num_verts = len(v_labels) + 1
-    E = [Edge(None,None,None,None) for i in xrange(num_outside_edges + Lw)]
-    T = [None for i in xrange(Lw)]
-    for i in xrange(num_outside_edges, num_outside_edges + Lw):
+    E = [Edge(None,None,None,None) for i in range(num_outside_edges + Lw)]
+    T = [None for i in range(Lw)]
+    for i in range(num_outside_edges, num_outside_edges + Lw):
       E[i].source = num_verts-1
     
     # fill in the edge data for the vertices
@@ -192,14 +192,14 @@ class TopSurface(object) :
         i += 2
       v_incident_edges.append(ans)
     
-    v_incident_edges.append( [SI(num_outside_edges+i,1) for i in xrange(Lw)] )
+    v_incident_edges.append( [SI(num_outside_edges+i,1) for i in range(Lw)] )
     
     V = [Vertex(VIE, None) for VIE in v_incident_edges]
     
     #build the faces
     #it only knows the vertices now; not where in the vertex incidence 
     #list it is
-    for i in xrange(Lw):
+    for i in range(Lw):
       e = [ SI(num_outside_edges+i), gens_to_edges[w[i]], SI(num_outside_edges+((i+1)%Lw), -1) ]
       v = [num_verts-1, E[e[0].ind].dest, E[e[2].ind].dest]
       for j,ei in enumerate(e):
@@ -212,8 +212,8 @@ class TopSurface(object) :
     #fill in the face data for the edges and vertices
     #and also where in the vertex each angle is
     for i,v in enumerate(V):
-      v.i_tris = [-1 for _ in xrange(len(v.i_edges))]
-      for j in xrange(len(v.i_edges)):
+      v.i_tris = [-1 for _ in range(len(v.i_edges))]
+      for j in range(len(v.i_edges)):
         ei = v.i_edges[j]
         if ei.sign > 0:
           OL = E[ei.ind].on_left
@@ -232,7 +232,7 @@ class TopSurface(object) :
     """place a new triangle with 0th vertex at vi in position i"""
     i_verts = [(VI, I), None, None]
     i_edges = [None,None,None]
-    for j in xrange(3):
+    for j in range(3):
       vi,i = i_verts[j]
       ei = self.v[ vi ].i_edges[i]
       e = self.e[ei.ind]
@@ -244,7 +244,7 @@ class TopSurface(object) :
     if i_verts[0] != (VI,I):
       raise ValueError("triangle is weird")
     
-    for j in xrange(3):
+    for j in range(3):
       self.v[ i_verts[j][0] ].i_tris[ i_verts[j][1] ] = (len(self.t),j)
       if i_edges[j].sign>0:
         self.e[ i_edges[j].ind ].on_left = (len(self.t), j)
@@ -264,7 +264,7 @@ class TopSurface(object) :
       self.t = []
     for vi in v_to_fill:
       v = self.v[vi]
-      for i in xrange(len(v.i_tris)):
+      for i in range(len(v.i_tris)):
         if v.i_tris[i] == None:
           self.attach_triangle_at( vi, i )
     return
@@ -283,7 +283,7 @@ class TopSurface(object) :
     edges_from_edges = [[] for e in self.e]
     edges_from_tris = [[] for t in self.t]
     tris_from_tris = [[] for t in self.t]
-    for ei in xrange(old_num_edges):
+    for ei in range(old_num_edges):
       new_vert_ind = len(self.v)
       new_edge_ind = len(self.e)
       vertices_from_edges[ei] = new_vert_ind
@@ -295,12 +295,12 @@ class TopSurface(object) :
       self.e.append(Edge(new_vert_ind, self.e[ei].dest, None, None))
       self.e[ei].dest = new_vert_ind
     
-    for ti in xrange(old_num_tris):
+    for ti in range(old_num_tris):
       t = self.t[ti]
-      edges_from_tris[ti] = [len(self.e)+i for i in xrange(3)]
-      tris_from_tris[ti] = [len(self.t)+i for i in xrange(3)] + [ti]
+      edges_from_tris[ti] = [len(self.e)+i for i in range(3)]
+      tris_from_tris[ti] = [len(self.t)+i for i in range(3)] + [ti]
       #add the triangles around it
-      for i in xrange(3):
+      for i in range(3):
         #add the edge
         v0 = vertices_from_edges[t.i_edges[(i-1)%3].ind]
         v0_ind = (4 if t.i_edges[(i-1)%3].sign>0 else 1)
@@ -317,13 +317,13 @@ class TopSurface(object) :
         self.t.append(new_t)
       #add the middle triangle (modify the existing triangle)
       new_t = Triangle(3*[None],3*[None])
-      for j in xrange(3):
+      for j in range(3):
         new_t.i_verts[j] = (vertices_from_edges[t.i_edges[j].ind], (4 if t.i_edges[j].sign>0 else 1))
         new_t.i_edges[j] = SI(edges_from_tris[ti][(j+1)%3],1)
       self.t[ti] = new_t
     
     for ti,t in enumerate(self.t):
-      for i in xrange(3):
+      for i in range(3):
         self.v[t.i_verts[i][0]].i_tris[t.i_verts[i][1]] = (ti,i)
         self.v[t.i_verts[i][0]].i_edges[t.i_verts[i][1]] = t.i_edges[i]
         ei = t.i_edges[i]
@@ -345,7 +345,7 @@ class TopSurface(object) :
     #print "Getting the loop from the word: ", w
     #print "Known loops: ", self.loops
     if any([W.lower() not in self.loops for W in w]):
-      print "Unrecognized loop letter"
+      print("Unrecognized loop letter")
       return None
     ans = TopologicalPath([])
     inverses = dict([ (ell.swapcase(), self.loops[ell].inverse()) for ell in self.loops])
@@ -400,7 +400,7 @@ class TopSurface(object) :
     return len(E) == len(set(E))
 
   def find_isolated_vertex(self):
-    for vi in xrange(len(self.v)):
+    for vi in range(len(self.v)):
       if self.is_isolated_vertex(vi):
         return vi
     return None

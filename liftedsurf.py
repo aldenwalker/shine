@@ -146,7 +146,7 @@ class LiftedSurface(gsurf.GeoSurface):
     #this may overwrite stuff, but it *should* be the same
     IV = new_t.i_verts
     IE = new_t.i_edges
-    for i in xrange(3):
+    for i in range(3):
       #fill in vert
       vi,j = IV[i]
       v = self.em_v[vi]
@@ -196,7 +196,7 @@ class LiftedSurface(gsurf.GeoSurface):
     new_es = [None, None, None]
     new_vs = [None, None, None]
     self.t_lifts[0].append(0)
-    for i in xrange(3):
+    for i in range(3):
       new_es[i] = CoveringEdge( (new_t.t.sides[i] if IE[i].sign > 0 else new_t.t.sides[i].reversed()), \
                                 IE[i].ind,                           \
                                 (i if IE[i].sign > 0 else (i+1)%3),          \
@@ -225,7 +225,7 @@ class LiftedSurface(gsurf.GeoSurface):
       #partially lifted
       #appears in the cover only once so far
       #isolated topologically
-      lifted = [i for i in xrange(len(self.v)) if len(self.v_lifts[i])>0]
+      lifted = [i for i in range(len(self.v)) if len(self.v_lifts[i])>0]
       partially_lifted = [i for i in lifted if not self.is_vertex_surrounded(i)]
       appears_once = [i for i in partially_lifted if len(self.v_lifts[i])==1]
       isolated = [i for i in appears_once if self.is_isolated_vertex(i)]
