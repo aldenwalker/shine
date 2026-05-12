@@ -54,19 +54,19 @@ class PlanarGraph:
     lines = f.read().split('\n')
     f.close()
     lines = [ell for ell in lines if len(ell)>0 and ell[0] != '#']
-    num_v, num_e = map(int, lines[0].split())
+    num_v, num_e = list(map(int, lines[0].split()))
     V = num_v*[None]
     E = num_e*[None]
-    for i in xrange(num_v):
-      V[i] = PlanarVertex(complex(*map(float, lines[i+1].split())), [], [])
-    for i in xrange(num_e):
-      E[i] = PlanarEdge(*map(int, lines[i+num_v+1].split()))
+    for i in range(num_v):
+      V[i] = PlanarVertex(complex(*list(map(float, lines[i+1].split()))), [], [])
+    for i in range(num_e):
+      E[i] = PlanarEdge(*list(map(int, lines[i+num_v+1].split())))
       V[E[i].src].i_edges.append(SI(i,1))
       V[E[i].dest].i_edges.append(SI(i,-1))
     
     #record the loops, if there are any
     loops = dict()
-    for i in xrange(1+num_v+num_e, len(lines)):
+    for i in range(1+num_v+num_e, len(lines)):
       ell = lines[i].split()
       loops[ell[0]] = ell[1:]
       
@@ -122,7 +122,7 @@ class EmbeddedPath(tsurf.TopologicalPath):
     return str(self)
   
   def __str__(self):
-    return "EmbeddedPath(" + str(zip(self.edges, self.edge_coords)) + ")"
+    return "EmbeddedPath(" + str(list(zip(self.edges, self.edge_coords))) + ")"
   
   def subdivide(self, old_TS, vertices_from_edges, edges_from_edges, edges_from_tris, tris_from_tris):
     super(EmbeddedPath, self).subdivide(old_TS, vertices_from_edges, edges_from_edges, edges_from_tris, tris_from_tris)
@@ -188,7 +188,7 @@ class EmbeddedSurface(tsurf.TopSurface):
       em_V.append( R3.Vector( (pv.pt.real, pv.pt.imag, -0.5)) )
       
       V_from_PG[i]['around'] = val*[None]
-      for j in xrange(val):
+      for j in range(val):
         V_from_PG[i]['around'][j] = len(V)
         V.append( tsurf.Vertex( 6*[None], 6*[None] ) )
         ang = average_angle( pv.i_edge_angles[j], pv.i_edge_angles[(j+1)%val] )
@@ -196,11 +196,11 @@ class EmbeddedSurface(tsurf.TopSurface):
                                  pv.pt.imag + 0.5*math.sin(ang),                    \
                                  0) ))
     #create edges around the vertices
-    E_from_PGV = [dict() for i in xrange(len(PG.v))]
+    E_from_PGV = [dict() for i in range(len(PG.v))]
     for i,pv in enumerate(PG.v):
       val = len(pv.i_edges)
       E_from_PGV[i]['around'] = val*[None]
-      for j in xrange(val):
+      for j in range(val):
         V[ V_from_PG[i]['top'] ].i_edges[2*j+1] = SI(len(E),1)
         V[ V_from_PG[i]['around'][j] ].i_edges[0] = SI(len(E),-1)
         E_from_PGV[i]['around'][j] = SI(len(E),1)
@@ -212,7 +212,7 @@ class EmbeddedSurface(tsurf.TopSurface):
     
     #create edges from edges
     #(but not diagonal because that'll make the top difficult)
-    E_from_PG = [dict() for i in xrange(len(PG.e))]
+    E_from_PG = [dict() for i in range(len(PG.e))]
     for i,pe in enumerate(PG.e):
       src_index = PG.v[pe.src].i_edges.index( SI(i,1) )
       src_val = len(PG.v[pe.src].i_edges)
@@ -362,7 +362,7 @@ class EmbeddedSurface(tsurf.TopSurface):
       ES.em_e[i] = [ES.em_v[e.source], ES.em_v[e.dest]]
     ES.em_t = len(ES.t)*[None]
     for i,t in enumerate(ES.t):
-      ES.em_t[i] = [ES.em_v[t.i_verts[j][0]] for j in xrange(3)]
+      ES.em_t[i] = [ES.em_v[t.i_verts[j][0]] for j in range(3)]
     
     return ES
   
@@ -387,10 +387,10 @@ class EmbeddedSurface(tsurf.TopSurface):
     old_ne = len(self.e)
     old_nt = len(self.t)
     old_TS, vertices_from_edges, edges_from_edges, edges_from_tris, tris_from_tris = super(EmbeddedSurface, self).subdivide()
-    self.em_v = [(self.em_v[i] if i<old_nv else None) for i in xrange(len(self.v))]
+    self.em_v = [(self.em_v[i] if i<old_nv else None) for i in range(len(self.v))]
     self.em_e = len(self.e)*[None]
     self.em_t = len(self.t)*[None]
-    for i in xrange(old_ne):
+    for i in range(old_ne):
       v0i = self.e[edges_from_edges[i][0]].source
       v1i = self.e[edges_from_edges[i][1]].dest
       new_vi = self.e[edges_from_edges[i][0]].dest
@@ -398,7 +398,7 @@ class EmbeddedSurface(tsurf.TopSurface):
     for ei,e in enumerate(self.e):
       self.em_e[ei] = [ self.em_v[e.source], self.em_v[e.dest] ]
     for ti,t in enumerate(self.t):
-      self.em_t[ti] = [ self.em_v[t.i_verts[i][0]] for i in xrange(3) ]
+      self.em_t[ti] = [ self.em_v[t.i_verts[i][0]] for i in range(3) ]
     for ell in self.loops:
       self.loops[ell] = EmbeddedPath.from_topological_path(self.loops[ell]) #(old_TS, vertices_from_edges, edges_from_edges, edges_from_tris, tris_from_tris)
     return old_TS, vertices_from_edges, edges_from_edges, edges_from_tris, tris_from_tris
@@ -418,7 +418,7 @@ class EmbeddedSurface(tsurf.TopSurface):
     for i,e in enumerate(self.e):
       self.em_e[i] = [self.em_v[e.source], self.em_v[e.dest]]
     for i,t in enumerate(self.t):
-      self.em_t[i] = [self.em_v[t.i_verts[j][0]] for j in xrange(3)]
+      self.em_t[i] = [self.em_v[t.i_verts[j][0]] for j in range(3)]
     return
   
   ##########################################################################

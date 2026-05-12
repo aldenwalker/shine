@@ -11,16 +11,16 @@ class Vector:
     
   
   def __sub__(self, other):
-    return Vector([self.x[i]-other.x[i] for i in xrange(len(self.x))])
+    return Vector([self.x[i]-other.x[i] for i in range(len(self.x))])
   
   def __add__(self, other):
-    return Vector([self.x[i]+other.x[i] for i in xrange(len(self.x))])
+    return Vector([self.x[i]+other.x[i] for i in range(len(self.x))])
   
   def __mul__(self, a):
-    return Vector([a*self.x[i] for i in xrange(2)])  
+    return Vector([a*self.x[i] for i in range(2)])  
   
-  def __div__(self, a):
-    return Vector([self.x[i]/a for i in xrange(2)])
+  def __truediv__(self, a):
+    return Vector([self.x[i]/a for i in range(2)])
   
   def __getitem__(self, i):
     return self.x[i]
@@ -42,7 +42,7 @@ class Vector:
     return Vector( [(ell/n)*v for v in self.x] )
   
   def dot(self, other):
-    return sum([self.x[i]*other.x[i] for i in xrange(len(self.x))])
+    return sum([self.x[i]*other.x[i] for i in range(len(self.x))])
   
   def cross(self, other):
     return self.x[0]*other.x[1]-self.x[1]*other.x[0]
@@ -130,20 +130,20 @@ def cubic_bezier_fit(pts, fix_endpoints=True):
   if fix_endpoints:
     p1 = pts[0][1]
     p2 = pts[-1][1]
-    for i in xrange(1,lpts-1):
+    for i in range(1,lpts-1):
       t,v = pts[i]
       x_amount = (1-t)**3*p1[0] + t**3*p2[0]
       y_amount = (1-t)**3*p1[1] + t**3*p2[1]
       pts[i] = (t, Vector([v[0]-x_amount, v[1]-y_amount]))
     M = np.matrix([[3*(1-t)**2*t, 3*(1-t)*t**2] for t,v in pts[1:-1]])
     RHS = np.matrix([[v[0], v[1]] for t,v in pts[1:-1]])
-    print "Points: ", pts
-    print pts
-    print M
-    print RHS
+    print("Points: ", pts)
+    print(pts)
+    print(M)
+    print(RHS)
     MT = M.getT()
     ans = (MT*M).getI()*MT
-    print ans.shape, RHS.shape
+    print(ans.shape, RHS.shape)
     ans = ans*RHS
     ans = ans.tolist()
     cp1 = Vector(ans[0])
@@ -185,12 +185,12 @@ def fit_polybezier(pts, num_breakpoints=None):
   #each cubic bezier therefore covers this much distance:
   distance_per_curve = float(n-1)/float(num_breakpoints+1)
   #we'll have to provide a scaled t values for each point
-  M = [M_cols * [0] for i in xrange(n-2)]
-  RHS = [ [0,0] for i in xrange(n-2)]
+  M = [M_cols * [0] for i in range(n-2)]
+  RHS = [ [0,0] for i in range(n-2)]
   #print "n:",n
   #print "num_breakpoints:",num_breakpoints
   #print "distance_per_curve:",distance_per_curve
-  for i in xrange(1,n-1):
+  for i in range(1,n-1):
     this_point_dist = float(i)
     breakpoint_index = int(this_point_dist / distance_per_curve)
     if breakpoint_index > num_breakpoints:
@@ -233,7 +233,7 @@ def fit_polybezier(pts, num_breakpoints=None):
   ans = (MT*M).getI()*MT*RHS
   ans = ans.tolist()
   points = [[pts[0], Vector(ans[0])] ]
-  for i in xrange(num_breakpoints):
+  for i in range(num_breakpoints):
     cp2 = Vector(ans[1+2*i])
     p2 = Vector(ans[1+2*i+1])
     points[-1].extend( [cp2, p2] )
@@ -261,15 +261,15 @@ def bezier_approximation(pts):
   n = len(pts)
   if n < 3:
     return fit_polybezier(pts)
-  total_angle = sum([(pts[i]-pts[i-1]).angle(pts[i+1]-pts[i]) for i in xrange(1,n-1)])
+  total_angle = sum([(pts[i]-pts[i-1]).angle(pts[i+1]-pts[i]) for i in range(1,n-1)])
   #each pi of angle should give about one breakpoint
   num_breakpoints = int(1.5*(total_angle / math.pi)+1)
   #each breakpoint should have about 10 points
   n_needed = 8*num_breakpoints + 8
   cut_number = int(n_needed / float(n))+1
   new_pts = []
-  for i in xrange(n-1):
-    for j in xrange(cut_number):
+  for i in range(n-1):
+    for j in range(cut_number):
       t = j/float(cut_number)
       new_pts.append( pts[i]*(1-t) + pts[i+1]*t )
   new_pts.append( pts[-1] )
